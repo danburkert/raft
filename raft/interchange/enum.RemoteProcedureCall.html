@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `RemoteProcedureCall` enum in crate `raft`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, RemoteProcedureCall">
+
+    <title>raft::interchange::RemoteProcedureCall - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        <a href='../../raft/index.html'><img src='https://raw.githubusercontent.com/Hoverbear/raft/master/raft.png' alt='' width='100'></a>
+        <p class='location'><a href='../index.html'>raft</a>::<wbr><a href='index.html'>interchange</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Accepted.html' title=''>Accepted</a><a class='struct ' href='struct.AppendEntries.html' title=''>AppendEntries</a><a class='struct ' href='struct.AppendRequest.html' title=''>AppendRequest</a><a class='struct ' href='struct.IndexRange.html' title=''>IndexRange</a><a class='struct ' href='struct.Rejected.html' title=''>Rejected</a><a class='struct ' href='struct.RequestVote.html' title=''>RequestVote</a></div><div class='block enum'><h2>Enums</h2><a class='enum ' href='enum.ClientRequest.html' title='Data interchange request format for Client &lt;-&gt; Node Communication. Each variant of this is a command which can be asked of the `RaftNode` after it is spun up with `node.spinup()` The node attached to this application will poll it&#39;s channel regularly and return results on the channel. If you&#39;re wondering where vote requesting is, it&#39;s hidden within the module. TODO: Currently requests are not queued or gaurenteed to serviced in order. This is probably a bad thing as most clients will `.send()` then `.recv()`. We can probably make a service queue for this.'>ClientRequest</a><a class='enum current' href='enum.RemoteProcedureCall.html' title='Data interchange format for RPC calls. These should match directly to the Raft paper&#39;s RPC descriptions.'>RemoteProcedureCall</a><a class='enum ' href='enum.RemoteProcedureResponse.html' title='Data interchange format for RPC responses. * `Accepted` mean that it worked. * `Rejected` means that `rpc.term &lt; node.persistent_state.current_term` or if the Node&#39;s `log` doesn&#39;t contain the entry at `rpc.prev_log_index` that maches `prev_log_term`. The caller should follow the `current_leader` it is directed to. The UUID should match the coresponding RPC.'>RemoteProcedureResponse</a></div>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content enum">
+<h1 class='fqn'><span class='in-band'>Enum <a href='../index.html'>raft</a>::<wbr><a href='index.html'>interchange</a>::<wbr><a class='enum' href=''>RemoteProcedureCall</a><wbr></span><span class='out-of-band'><span id='render-detail'>
+            <a id="collapse-all" href="#">[-]</a>&nbsp;<a id="expand-all" href="#">[+]</a>
+        </span><a id='src-15' href='../../src/raft/interchange.rs.html#13-16'>[src]</a></span></h1>
+<pre class='rust enum'>pub enum RemoteProcedureCall&lt;T&gt; {
+    AppendEntries(<a class='struct' href='../../raft/interchange/struct.AppendEntries.html' title='raft::interchange::AppendEntries'>AppendEntries</a>&lt;T&gt;),
+    RequestVote(<a class='struct' href='../../raft/interchange/struct.RequestVote.html' title='raft::interchange::RequestVote'>RequestVote</a>),
+}</pre><div class='docblock'><p>Data interchange format for RPC calls. These should match directly to the Raft paper&#39;s RPC
+descriptions.</p>
+</div><h2 class='variants'>Variants</h2>
+<table><tr><td id='variant.AppendEntries'><a class='stability Unmarked' title='No stability level'></a><code>AppendEntries</code></td><td></td></tr><tr><td id='variant.RequestVote'><a class='stability Unmarked' title='No stability level'></a><code>RequestVote</code></td><td></td></tr></table><h2 id='methods'>Methods</h2><h3 class='impl'><a class='stability Unmarked' title='No stability level'></a><code>impl&lt;T&gt; <a class='enum' href='../../raft/interchange/enum.RemoteProcedureCall.html' title='raft::interchange::RemoteProcedureCall'>RemoteProcedureCall</a>&lt;T&gt;</code></h3><div class='impl-items'><h4 id='method.append_entries' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.append_entries' class='fnname'>append_entries</a>(term: <a href='http://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>, leader_id: <a href='http://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>, prev_log_index: <a href='http://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>, prev_log_term: <a href='http://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>, entries: <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(<a href='http://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>, T)</a>&gt;, leader_commit: <a href='http://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(<a class='struct' href='../../uuid/struct.Uuid.html' title='uuid::Uuid'>Uuid</a>, <a class='enum' href='../../raft/interchange/enum.RemoteProcedureCall.html' title='raft::interchange::RemoteProcedureCall'>RemoteProcedureCall</a>&lt;T&gt;)</a></code></h4>
+<div class='docblock'><p>Returns (term, success)</p>
+</div><h4 id='method.request_vote' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.request_vote' class='fnname'>request_vote</a>(term: <a href='http://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>, candidate_id: <a href='http://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>, last_log_index: <a href='http://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>, last_log_term: <a href='http://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(<a class='struct' href='../../uuid/struct.Uuid.html' title='uuid::Uuid'>Uuid</a>, <a class='enum' href='../../raft/interchange/enum.RemoteProcedureCall.html' title='raft::interchange::RemoteProcedureCall'>RemoteProcedureCall</a>&lt;T&gt;)</a></code></h4>
+<div class='docblock'><p>Returns (term, voteGranted)</p>
+</div></div><h2 id='implementations'>Trait Implementations</h2><h3 id='derived_implementations'>Derived Implementations </h3><h3 class='impl'><a class='stability Stable' title='Stable'></a><code>impl&lt;T: <a class='trait' href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html' title='core::clone::Clone'>Clone</a>&gt; <a class='trait' href='http://doc.rust-lang.org/nightly/core/clone/trait.Clone.html' title='core::clone::Clone'>Clone</a> for <a class='enum' href='../../raft/interchange/enum.RemoteProcedureCall.html' title='raft::interchange::RemoteProcedureCall'>RemoteProcedureCall</a>&lt;T&gt;</code></h3><div class='impl-items'><h4 id='method.clone' class='method'><a class='stability Stable' title='Stable'></a><code>fn <a href='#method.clone' class='fnname'>clone</a>(&amp;self) -&gt; <a class='enum' href='../../raft/interchange/enum.RemoteProcedureCall.html' title='raft::interchange::RemoteProcedureCall'>RemoteProcedureCall</a>&lt;T&gt;</code></h4>
+<h4 id='method.clone_from' class='tymethod'><a class='stability Unstable' title='Unstable: this function is rarely used'></a><code>fn <a href='#tymethod.clone_from' class='fnname'>clone_from</a>(&amp;mut self, source: &amp;Self)</code></h4>
+</div><h3 class='impl'><a class='stability Stable' title='Stable'></a><code>impl&lt;T: <a class='trait' href='http://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a>&gt; <a class='trait' href='http://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a> for <a class='enum' href='../../raft/interchange/enum.RemoteProcedureCall.html' title='raft::interchange::RemoteProcedureCall'>RemoteProcedureCall</a>&lt;T&gt;</code></h3><div class='impl-items'><h4 id='method.fmt' class='method'><a class='stability Stable' title='Stable'></a><code>fn <a href='#method.fmt' class='fnname'>fmt</a>(&amp;self, __arg_0: &amp;mut <a class='struct' href='http://doc.rust-lang.org/nightly/core/fmt/struct.Formatter.html' title='core::fmt::Formatter'>Formatter</a>) -&gt; <a class='type' href='http://doc.rust-lang.org/nightly/core/fmt/type.Result.html' title='core::fmt::Result'>Result</a></code></h4>
+</div><h3 class='impl'><a class='stability Unmarked' title='No stability level'></a><code>impl&lt;T: <a class='trait' href='../../rustc-serialize/serialize/trait.Decodable.html' title='rustc-serialize::serialize::Decodable'>Decodable</a>&gt; <a class='trait' href='../../rustc-serialize/serialize/trait.Decodable.html' title='rustc-serialize::serialize::Decodable'>Decodable</a> for <a class='enum' href='../../raft/interchange/enum.RemoteProcedureCall.html' title='raft::interchange::RemoteProcedureCall'>RemoteProcedureCall</a>&lt;T&gt;</code></h3><div class='impl-items'><h4 id='method.decode' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.decode' class='fnname'>decode</a>&lt;__D: <a class='trait' href='../../rustc-serialize/serialize/trait.Decoder.html' title='rustc-serialize::serialize::Decoder'>Decoder</a>&gt;(__arg_0: &amp;mut __D) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/result/enum.Result.html' title='core::result::Result'>Result</a>&lt;<a class='enum' href='../../raft/interchange/enum.RemoteProcedureCall.html' title='raft::interchange::RemoteProcedureCall'>RemoteProcedureCall</a>&lt;T&gt;, Error&gt;</code></h4>
+</div><h3 class='impl'><a class='stability Unmarked' title='No stability level'></a><code>impl&lt;T: <a class='trait' href='../../rustc-serialize/serialize/trait.Encodable.html' title='rustc-serialize::serialize::Encodable'>Encodable</a>&gt; <a class='trait' href='../../rustc-serialize/serialize/trait.Encodable.html' title='rustc-serialize::serialize::Encodable'>Encodable</a> for <a class='enum' href='../../raft/interchange/enum.RemoteProcedureCall.html' title='raft::interchange::RemoteProcedureCall'>RemoteProcedureCall</a>&lt;T&gt;</code></h3><div class='impl-items'><h4 id='method.encode' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.encode' class='fnname'>encode</a>&lt;__S: <a class='trait' href='../../rustc-serialize/serialize/trait.Encoder.html' title='rustc-serialize::serialize::Encoder'>Encoder</a>&gt;(&amp;self, __arg_0: &amp;mut __S) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/result/enum.Result.html' title='core::result::Result'>Result</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>()</a>, Error&gt;</code></h4>
+</div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../";
+        window.currentCrate = "raft";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../jquery.js"></script>
+    <script src="../../main.js"></script>
+    
+    <script async src="../../search-index.js"></script>
+</body>
+</html>
