@@ -1,4 +1,4 @@
-#![feature(old_path)]
+use std::path::Path;
 
 extern crate capnpc;
 

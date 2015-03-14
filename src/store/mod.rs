@@ -2,7 +2,7 @@ mod mem;
 
 use std::error;
 use std::fmt::Debug;
-use std::old_io::net::ip::SocketAddr;
+use std::net::SocketAddr;
 use std::result;
 
 use LogIndex;

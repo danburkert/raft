@@ -1,10 +1,9 @@
 use std::collections::{hash_map, HashMap, HashSet};
-use std::old_io::net::ip::SocketAddr;
-use std::old_io::net::tcp::TcpStream;
+use std::net::{SocketAddr, TcpStream};
 use std::str::FromStr;
 
 use capnp::serialize::OwnedSpaceMessageReader;
-use capnp::{serialize_packed, MessageBuilder, MessageReader, ReaderOptions, MallocMessageBuilder};
+use capnp::{self, serialize_packed, MessageBuilder, MessageReader, MallocMessageBuilder};
 
 use messages_capnp::{
     append_entries_response,
@@ -135,19 +134,15 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
 
     fn apply_rpc(&mut self, message: OwnedSpaceMessageReader, connection: TcpStream) {
         let rpc = message.get_root::<rpc::Reader>();
-        match rpc.which() {
-            Some(rpc::AppendEntries(request)) => self.apply_append_entries_request(request, connection),
-            Some(rpc::RequestVote(request_vote_request)) => {
-
-            },
-            None => {
-            }
+        match rpc.which().unwrap() { // TODO: error handling
+            rpc::AppendEntries(request) => self.apply_append_entries_request(request, connection),
+            rpc::RequestVote(request_vote_request) => self.apply_request_vote_request(request_vote_request, connection),
         }
     }
 
     fn apply_append_entries_request(&mut self,
                                     request: append_entries_request::Reader,
-                                    mut connection: TcpStream) {
+                                    connection: TcpStream) {
         let mut response_message = MallocMessageBuilder::new_default();
         {
             let mut response = response_message.init_root::<append_entries_response::Builder>();
@@ -169,7 +164,7 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
                         } else {
                             let (existing_term, _) = self.store.entry(prev_log_index).unwrap();
                             if existing_term != prev_log_term {
-                                self.store.truncate_entries(prev_log_index);
+                                self.store.truncate_entries(prev_log_index).unwrap(); // TODO: error handling
                                 response.set_inconsistent_prev_entry(());
                             } else {
 
@@ -197,12 +192,14 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
             }
         }
 
-        serialize_packed::write_packed_message_unbuffered(&mut connection, &mut response_message).unwrap(); // TODO: error handling
+        serialize_packed::write_packed_message_unbuffered(&mut capnp::io::WriteOutputStream::new(connection),
+                                                          &mut response_message)
+                        .unwrap(); // TODO: error handling
     }
 
     fn apply_request_vote_request(&mut self,
                                   request: request_vote_request::Reader,
-                                  mut connection: TcpStream) {
+                                  connection: TcpStream) {
         let mut response_message = MallocMessageBuilder::new_default();
         {
             let mut response = response_message.init_root::<request_vote_response::Builder>();
@@ -220,21 +217,25 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
                 response.set_already_voted(());
             } else {
                 if candidate_term != local_term {
-                    self.store.set_current_term(candidate_term);
+                    self.store.set_current_term(candidate_term).unwrap(); // TODO: error handling
                 }
                 let candidate = SocketAddr::from_str(request.get_candidate()).unwrap(); // TODO: error handling
-                self.store.set_voted_for(Some(candidate));
+                self.store.set_voted_for(Some(candidate)).unwrap(); // TODO: error handling
                 response.set_granted(());
             }
         }
 
-        serialize_packed::write_packed_message_unbuffered(&mut connection, &mut response_message).unwrap(); // TODO: error handling
+        serialize_packed::write_packed_message_unbuffered(&mut capnp::io::WriteOutputStream::new(connection),
+                                                          &mut response_message)
+                         .unwrap(); // TODO: error handling
     }
 
-    fn apply_request_vote_result(&mut self, message: OwnedSpaceMessageReader) {
+    fn apply_request_vote_result(&mut self, _message: OwnedSpaceMessageReader) {
+        unimplemented!()
     }
 
-    fn apply_append_entries_result(&mut self, message: OwnedSpaceMessageReader) {
+    fn apply_append_entries_result(&mut self, _message: OwnedSpaceMessageReader) {
+        unimplemented!()
     }
 
     fn shutdown(&mut self) { }

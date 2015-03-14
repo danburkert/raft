@@ -1,4 +1,4 @@
-use std::old_io::net::tcp::TcpStream;
+use std::net::TcpStream;
 
 use capnp::serialize::OwnedSpaceMessageReader;
 

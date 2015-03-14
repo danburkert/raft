@@ -2,12 +2,11 @@ mod inner;
 
 use std::{fmt, marker, thread};
 use std::collections::HashSet;
-use std::old_io::net::tcp::{TcpListener, TcpStream};
-use std::old_io::{Acceptor, IoResult, Listener};
-use std::old_io::net::ip::SocketAddr;
+use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::io;
 use std::sync::mpsc;
 
-use capnp::{serialize_packed, ReaderOptions};
+use capnp::{self, serialize_packed, ReaderOptions};
 
 use node::inner::InnerNode;
 use store::Store;
@@ -28,7 +27,7 @@ pub struct Node<S, P> where S: StateMachine {
     /// Shutdown hook
     event_channel: mpsc::SyncSender<Event>,
 
-    bound_address: SocketAddr,
+    socket_addr: SocketAddr,
 
     _state_machine: marker::PhantomData<S>,
 
@@ -51,11 +50,10 @@ impl <S, P> Node<S, P> where S: StateMachine, P: Store {
 
         let (event_tx, event_rx) = mpsc::sync_channel::<Event>(128);
 
-        let bound_address;
+        let socket_addr;
         let rpc_listener = {
-            let mut listener = try!(TcpListener::bind(address));
-            bound_address = try!(listener.socket_name());
-            let mut socket = try!(listener.listen());
+            let socket = try!(TcpListener::bind(&address));
+            socket_addr = try!(socket.socket_addr());
             let event_channel = event_tx.clone();
 
             thread::spawn(move || {
@@ -80,20 +78,20 @@ impl <S, P> Node<S, P> where S: StateMachine, P: Store {
             rpc_listener: rpc_listener,
             event_loop: event_loop,
             event_channel: event_tx,
-            bound_address: bound_address,
+            socket_addr: socket_addr,
             _state_machine: marker::PhantomData,
             _persistent_state: marker::PhantomData,
         })
     }
 
-    pub fn bound_address(&self) -> &SocketAddr {
-        &self.bound_address
+    pub fn socket_addr(&self) -> &SocketAddr {
+        &self.socket_addr
     }
 }
 
 impl <S, P> fmt::Debug for Node<S, P> where S: StateMachine {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        format!("Node({})", self.bound_address).fmt(f)
+        format!("Node({})", self.socket_addr).fmt(f)
     }
 }
 
@@ -108,10 +106,11 @@ impl <S, P> Drop for Node<S, P> where S: StateMachine {
 /// the event channel. If the RPC fails with an IO error or the message cannot
 /// be created, the error is logged. If the event channel is closed, a panic
 /// is raised.
-fn handle_rpc(stream: IoResult<TcpStream>, event_channel: &mpsc::SyncSender<Event>) {
+fn handle_rpc(stream: io::Result<TcpStream>, event_channel: &mpsc::SyncSender<Event>) {
     match stream {
-        Ok(mut connection) => {
-            let message = serialize_packed::new_reader_unbuffered(&mut connection, ReaderOptions::new());
+        Ok(connection) => {
+            let mut input_stream = capnp::io::ReadInputStream::new(connection.try_clone().unwrap()); // TODO: error handling
+            let message = serialize_packed::new_reader_unbuffered(&mut input_stream, ReaderOptions::new());
             match message {
                 Ok(message) => {
                     let event = Event::Rpc { message: message, connection: connection };
@@ -128,8 +127,7 @@ fn handle_rpc(stream: IoResult<TcpStream>, event_channel: &mpsc::SyncSender<Even
 mod test {
 
     use std::str::FromStr;
-    use std::old_io::net::ip::SocketAddr;
-    use std::iter::IntoIterator;
+    use std::net::SocketAddr;
 
     use super::*;
     use state_machine::NullStateMachine;
@@ -138,9 +136,10 @@ mod test {
     #[test]
     fn test_node_creation() {
         let address = SocketAddr::from_str("127.0.0.1:0").unwrap();
-        let node = Node::new(address,
-                             [address].iter().cloned().collect(),
-                             NullStateMachine,
-                             store::MemStore::new());
+        Node::new(address,
+                  [address].iter().cloned().collect(),
+                  NullStateMachine,
+                  store::MemStore::new())
+            .unwrap();
     }
 }

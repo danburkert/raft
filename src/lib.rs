@@ -2,16 +2,14 @@
 
 #![feature(
     core,
-    collections,
     io,
-    old_io,
+    net,
     std_misc,
     unsafe_destructor,
 )]
 
 extern crate capnp;
 extern crate rand;
-//extern crate threadpool;
 #[macro_use] extern crate log;
 
 pub mod store;
