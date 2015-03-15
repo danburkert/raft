@@ -1,6 +1,7 @@
 use std::collections::{hash_map, HashMap, HashSet};
 use std::net::{SocketAddr, TcpStream};
 use std::str::FromStr;
+use std::error::Error;
 
 use capnp::serialize::OwnedSpaceMessageReader;
 use capnp::{self, serialize_packed, MessageBuilder, MessageReader, MallocMessageBuilder};
@@ -134,100 +135,104 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
 
     fn apply_rpc(&mut self, message: OwnedSpaceMessageReader, connection: TcpStream) {
         let rpc = message.get_root::<rpc::Reader>();
-        match rpc.which().unwrap() { // TODO: error handling
-            rpc::AppendEntries(request) => self.apply_append_entries_request(request, connection),
-            rpc::RequestVote(request_vote_request) => self.apply_request_vote_request(request_vote_request, connection),
-        }
-    }
-
-    fn apply_append_entries_request(&mut self,
-                                    request: append_entries_request::Reader,
-                                    connection: TcpStream) {
         let mut response_message = MallocMessageBuilder::new_default();
-        {
-            let mut response = response_message.init_root::<append_entries_response::Builder>();
 
-            let leader_term = Term(request.get_term());
-            let current_term = self.store.current_term().unwrap(); // TODO: error handling
-
-            if leader_term < current_term {
-                response.set_stale_term(current_term.as_u64())
-            } else {
-                match self.node_state {
-                    NodeState::Follower => {
-                        let prev_log_index = LogIndex(request.get_prev_log_index());
-                        let prev_log_term = Term(request.get_prev_log_term());
-
-                        let local_latest_index = self.store.latest_index().unwrap(); // TODO: error handling
-                        if local_latest_index < prev_log_index {
-                            response.set_inconsistent_prev_entry(());
-                        } else {
-                            let (existing_term, _) = self.store.entry(prev_log_index).unwrap();
-                            if existing_term != prev_log_term {
-                                self.store.truncate_entries(prev_log_index).unwrap(); // TODO: error handling
-                                response.set_inconsistent_prev_entry(());
-                            } else {
-
-                                let entries = request.get_entries();
-                                let num_entries = entries.len();
-                                if num_entries > 0 {
-                                    let mut entries_vec = Vec::with_capacity(num_entries as usize);
-                                    for i in 0..num_entries as u32 {
-                                        entries_vec.push((leader_term, entries.get(i)));
-                                    }
-
-                                    self.store.append_entries(prev_log_index + 1, &entries_vec).unwrap(); // TODO: error handling
-                                }
-
-                                response.set_success(());
-                            }
-                        }
-                    },
-                    NodeState::Candidate | NodeState::Leader(..) => {
-                        // recognize the new leader, return to follower state, and apply the entries
-                        self.node_state = NodeState::Follower;
-                        return self.apply_append_entries_request(request, connection)
-                    },
-                }
-            }
-        }
-
-        serialize_packed::write_packed_message_unbuffered(&mut capnp::io::WriteOutputStream::new(connection),
-                                                          &mut response_message)
-                        .unwrap(); // TODO: error handling
-    }
-
-    fn apply_request_vote_request(&mut self,
-                                  request: request_vote_request::Reader,
-                                  connection: TcpStream) {
-        let mut response_message = MallocMessageBuilder::new_default();
-        {
-            let mut response = response_message.init_root::<request_vote_response::Builder>();
-
-            let candidate_term = Term(request.get_term());
-            let candidate_index = LogIndex(request.get_last_log_index());
-            let local_term = self.store.current_term().unwrap(); // TODO: error handling
-            let local_index = self.store.latest_index().unwrap(); // TODO: error handling
-
-            if candidate_term < local_term {
-                response.set_stale_term(local_term.as_u64());
-            } else if candidate_term == local_term && candidate_index < local_index {
-                response.set_inconsistent_log(());
-            } else if candidate_term == local_term && self.store.voted_for().unwrap().is_some() {
-                response.set_already_voted(());
-            } else {
-                if candidate_term != local_term {
-                    self.store.set_current_term(candidate_term).unwrap(); // TODO: error handling
-                }
-                let candidate = SocketAddr::from_str(request.get_candidate()).unwrap(); // TODO: error handling
-                self.store.set_voted_for(Some(candidate)).unwrap(); // TODO: error handling
-                response.set_granted(());
+        match rpc.which() {
+            Ok(rpc::AppendEntries(request)) => self.apply_append_entries_request(request, &mut response_message),
+            Ok(rpc::RequestVote(request_vote_request)) => self.apply_request_vote_request(request_vote_request, &mut response_message),
+            Err(_) => {
+                let mut response = response_message.init_root::<append_entries_response::Builder>();
+                response.set_internal_error("RPC type not recognized");
             }
         }
 
         serialize_packed::write_packed_message_unbuffered(&mut capnp::io::WriteOutputStream::new(connection),
                                                           &mut response_message)
                          .unwrap(); // TODO: error handling
+    }
+
+    fn apply_append_entries_request(&mut self,
+                                    request: append_entries_request::Reader,
+                                    response_message: &mut MallocMessageBuilder) {
+        let leader_term = Term(request.get_term());
+        let current_term = rpc_try!(response_message.init_root::<append_entries_response::Builder>(),
+                                    self.store.current_term());
+
+        if leader_term < current_term {
+            let mut response = response_message.init_root::<append_entries_response::Builder>();
+            response.set_stale_term(current_term.as_u64())
+        } else {
+            match self.node_state {
+                NodeState::Follower => {
+                    let mut response = response_message.init_root::<append_entries_response::Builder>();
+                    let prev_log_index = LogIndex(request.get_prev_log_index());
+                    let prev_log_term = Term(request.get_prev_log_term());
+
+                    let local_latest_index = rpc_try!(response, self.store.latest_index());
+                    if local_latest_index < prev_log_index {
+                        response.set_inconsistent_prev_entry(());
+                    } else {
+                        let (existing_term, _) = self.store.entry(prev_log_index).unwrap();
+                        if existing_term != prev_log_term {
+                            rpc_try!(response, self.store.truncate_entries(prev_log_index));
+                            response.set_inconsistent_prev_entry(());
+                        } else {
+
+                            let entries = request.get_entries();
+                            let num_entries = entries.len();
+                            if num_entries > 0 {
+                                let mut entries_vec = Vec::with_capacity(num_entries as usize);
+                                for i in 0..num_entries as u32 {
+                                    entries_vec.push((leader_term, entries.get(i)));
+                                }
+
+                                rpc_try!(response, self.store.append_entries(prev_log_index + 1, &entries_vec));
+                            }
+
+                            response.set_success(());
+                        }
+                    }
+                },
+                NodeState::Candidate | NodeState::Leader(..) => {
+                    // recognize the new leader, return to follower state, and apply the entries
+                    self.node_state = NodeState::Follower;
+                    return self.apply_append_entries_request(request, response_message)
+                },
+            }
+        }
+    }
+
+    fn apply_request_vote_request(&mut self,
+                                  request: request_vote_request::Reader,
+                                  response_message: &mut MallocMessageBuilder) {
+        let mut response = response_message.init_root::<request_vote_response::Builder>();
+
+        let candidate_term = Term(request.get_term());
+        let candidate_index = LogIndex(request.get_last_log_index());
+        let local_term = rpc_try!(response, self.store.current_term());
+        let local_index = rpc_try!(response, self.store.latest_index());
+
+        if candidate_term < local_term {
+            response.set_stale_term(local_term.as_u64());
+        } else if candidate_term == local_term && candidate_index < local_index {
+            response.set_inconsistent_log(());
+        } else if candidate_term == local_term && self.store.voted_for().unwrap().is_some() {
+            response.set_already_voted(());
+        } else {
+            if candidate_term != local_term {
+                rpc_try!(response, self.store.set_current_term(candidate_term));
+            }
+            // TODO: this should use rpc_try!, but std::net::parser::ParseError currently does not impl Error
+            let candidate = match SocketAddr::from_str(request.get_candidate()) {
+                Ok(addr) => addr,
+                Err(_) => {
+                    response.set_internal_error("Unable to parse candidate socket address");
+                    return;
+                }
+            };
+            rpc_try!(response, self.store.set_voted_for(Some(candidate)));
+            response.set_granted(());
+        }
     }
 
     fn apply_request_vote_result(&mut self, _message: OwnedSpaceMessageReader) {

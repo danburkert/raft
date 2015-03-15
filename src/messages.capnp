@@ -42,6 +42,9 @@ struct AppendEntriesResponse {
     inconsistentPrevEntry @2 :Void;
     # The `AppendEntries` request failed because the follower failed the
     # previous entry term and index checks
+
+    internalError @3 :Text;
+    # an internal error occured; a description is included.
   }
 }
 
@@ -77,5 +80,8 @@ struct RequestVoteResponse {
     inconsistentLog @3 :Void;
     # The `RequestVote` request failed because the candidate's log is not
     # up-to-date with the voter's log
+
+    internalError @4 :Text;
+    # an internal error occured; a description is included.
   }
 }

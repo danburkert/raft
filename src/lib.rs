@@ -12,6 +12,18 @@ extern crate capnp;
 extern crate rand;
 #[macro_use] extern crate log;
 
+macro_rules! rpc_try {
+    ($response:expr, $expr:expr) => ({
+        match $expr {
+            ::std::result::Result::Err(err) => {
+                $response.set_internal_error(err.description());
+                return;
+            },
+            ::std::result::Result::Ok(val) => val,
+        }
+    })
+}
+
 pub mod store;
 
 mod error;
@@ -33,6 +45,8 @@ pub mod messages_capnp {
 pub use state_machine::StateMachine;
 
 pub type Result<T, S> where S: StateMachine = result::Result<T, Error<S>>;
+
+
 
 /// The term of a log entry.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
