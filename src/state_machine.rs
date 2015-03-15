@@ -26,18 +26,17 @@ pub struct ChannelStateMachine {
 
 impl StateMachine for ChannelStateMachine {
 
-    // This should really be mpsc::SendError<Vec<u8>>, but it doesn't impl Error at the moment
-    type Error = io::Error;
+    type Error = mpsc::SendError<Vec<u8>>;
 
-    fn apply(&mut self, command: &[u8]) -> result::Result<(), io::Error> {
-        Ok(self.tx.send(command.to_vec()).unwrap())
+    fn apply(&mut self, command: &[u8]) -> result::Result<(), mpsc::SendError<Vec<u8>>> {
+        self.tx.send(command.to_vec())
     }
 
-    fn snapshot(&self) -> result::Result<Vec<u8>, io::Error> {
+    fn snapshot(&self) -> result::Result<Vec<u8>, mpsc::SendError<Vec<u8>>> {
         Ok(Vec::new())
     }
 
-    fn restore_snapshot(&mut self, _snapshot: Vec<u8>) -> result::Result<(), io::Error> {
+    fn restore_snapshot(&mut self, _snapshot: Vec<u8>) -> result::Result<(), mpsc::SendError<Vec<u8>>> {
         Ok(())
     }
 }
@@ -62,4 +61,3 @@ impl StateMachine for NullStateMachine {
         Ok(())
     }
 }
-
