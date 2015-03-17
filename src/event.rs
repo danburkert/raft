@@ -7,10 +7,10 @@ pub enum Event {
         message: OwnedSpaceMessageReader,
         connection: TcpStream,
     },
-    RequestVoteResult {
+    RequestVoteResponse {
         message: OwnedSpaceMessageReader,
     },
-    AppendEntriesResult {
+    AppendEntriesResponse {
         message: OwnedSpaceMessageReader,
     },
     Shutdown

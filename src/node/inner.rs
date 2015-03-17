@@ -27,14 +27,14 @@ use store::Store;
 /// * `Candidate` -  which campaigns in an election and may become a `Leader`
 ///                  (if it gets enough votes) or a `Follower`, if it hears from
 ///                  a `Leader`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum NodeState {
     Follower,
-    Candidate,
+    Candidate(CandidateState),
     Leader(LeaderState),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct LeaderState {
     last_index: LogIndex,
     next_index: HashMap<SocketAddr, LogIndex>,
@@ -88,6 +88,11 @@ impl LeaderState {
     }
 }
 
+#[derive(Clone, Debug)]
+struct CandidateState {
+    granted_votes: usize,
+}
+
 /// The Raft state machine.
 ///
 /// The inner node implements the core Raft logic. The inner node itself is a
@@ -127,14 +132,20 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
     pub fn apply(&mut self, event: Event) {
         match event {
             Event::Rpc { message, connection } => self.apply_rpc(message, connection),
-            Event::RequestVoteResult { message} => self.apply_request_vote_result(message),
-            Event::AppendEntriesResult { message } => self.apply_append_entries_result(message),
+            Event::RequestVoteResponse { message } => {
+                let response = message.get_root::<request_vote_response::Reader>();
+                self.apply_request_vote_response(response)
+            },
+            Event::AppendEntriesResponse { message } => {
+                let response = message.get_root::<append_entries_response::Reader>();
+                self.apply_append_entries_response(response)
+            },
             Event::Shutdown => self.shutdown()
         }
     }
 
-    fn apply_rpc(&mut self, message: OwnedSpaceMessageReader, connection: TcpStream) {
-        let rpc = message.get_root::<rpc::Reader>();
+    fn apply_rpc(&mut self, rpc_message: OwnedSpaceMessageReader, connection: TcpStream) {
+        let rpc = rpc_message.get_root::<rpc::Reader>();
         let mut response_message = MallocMessageBuilder::new_default();
 
         match rpc.which() {
@@ -193,7 +204,7 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
                         }
                     }
                 },
-                NodeState::Candidate | NodeState::Leader(..) => {
+                NodeState::Candidate(..) | NodeState::Leader(..) => {
                     // recognize the new leader, return to follower state, and apply the entries
                     self.node_state = NodeState::Follower;
                     return self.apply_append_entries_request(request, response_message)
@@ -231,17 +242,78 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
                 }
             };
             rpc_try!(response, self.store.set_voted_for(Some(candidate)));
-            response.set_granted(());
+            response.set_granted(candidate_term.as_u64());
         }
     }
 
-    fn apply_request_vote_result(&mut self, _message: OwnedSpaceMessageReader) {
-        unimplemented!()
+    fn apply_request_vote_response(&mut self, response: request_vote_response::Reader) {
+
+        let new_state: Option<NodeState> = match self.node_state {
+            NodeState::Candidate(ref mut state) => {
+                match response.which() {
+                    Ok(request_vote_response::Granted(term)) => {
+                        let term = Term(term);
+                        let current_term = self.store.current_term().unwrap(); // TODO: error handling
+                        assert!(term <= current_term);
+                        if term != current_term {
+                            // A response to an older election; ignore it
+                            None
+                        } else {
+                            state.granted_votes = state.granted_votes + 1;
+
+                            if state.granted_votes > quorum(self.peers.len() + 1) {
+                                // Transition to leader
+                                let latest_index = self.store.latest_index().unwrap(); // TODO: error handling
+                                Some(NodeState::Leader(LeaderState::new(latest_index)))
+                            } else {
+                                None
+                            }
+                        }
+                    },
+                    Ok(request_vote_response::StaleTerm(term)) => {
+                        None
+                    },
+                    Ok(request_vote_response::AlreadyVoted(_)) => {
+                        None
+                    },
+                    Ok(request_vote_response::InconsistentLog(_)) => {
+                        None
+                    },
+                    Ok(request_vote_response::InternalError(error)) => {
+                        None
+                    },
+                    Err(_) => {
+                        error!("Request Vote Response type not recognized.");
+                        None
+                    },
+                }
+            },
+
+            NodeState::Follower | NodeState::Leader(..) => None,
+        };
+
+        if let Some(state) = new_state {
+            self.node_state = state;
+        }
     }
 
-    fn apply_append_entries_result(&mut self, _message: OwnedSpaceMessageReader) {
-        unimplemented!()
+    fn apply_append_entries_response(&mut self, response: append_entries_response::Reader) {
+        match response.which() {
+            Ok(append_entries_response::Success(_)) => {
+            },
+            Ok(append_entries_response::StaleTerm(term)) => {
+            },
+            Ok(append_entries_response::InconsistentPrevEntry(_)) => {
+            },
+            Ok(append_entries_response::InternalError(error)) => {
+            },
+            Err(_) => error!("Append Entries Response type not recognized"),
+        }
     }
 
     fn shutdown(&mut self) { }
+}
+
+fn quorum(num_peers: usize) -> usize {
+    0
 }

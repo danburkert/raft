@@ -66,8 +66,8 @@ struct RequestVoteRequest {
 struct RequestVoteResponse {
 
   union {
-    granted @0 :Void;
-    # The voter voted for the candidate
+    granted @0 :UInt64;
+    # The voter voted for the candidate; the candidate's term is included.
 
     staleTerm @1 :UInt64;
     # The `RequestVote` request failed because the voter has a greater term
