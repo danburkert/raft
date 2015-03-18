@@ -9,6 +9,8 @@ build = "build.rs"
   capnpc = "*"
 
 [dependencies]
-capnp = "*"
 log = "*"
 rand = "*"
+
+[dependencies.capnp]
+git = "https://github.com/dwrensha/capnproto-rust.git"

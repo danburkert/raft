@@ -133,11 +133,11 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
         match event {
             Event::Rpc { message, connection } => self.apply_rpc(message, connection),
             Event::RequestVoteResponse { message } => {
-                let response = message.get_root::<request_vote_response::Reader>();
+                let response = message.get_root::<request_vote_response::Reader>().unwrap(); // TODO: error handling
                 self.apply_request_vote_response(response)
             },
             Event::AppendEntriesResponse { message } => {
-                let response = message.get_root::<append_entries_response::Reader>();
+                let response = message.get_root::<append_entries_response::Reader>().unwrap(); // TODO: error handling
                 self.apply_append_entries_response(response)
             },
             Event::Shutdown => self.shutdown()
@@ -145,12 +145,12 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
     }
 
     fn apply_rpc(&mut self, rpc_message: OwnedSpaceMessageReader, connection: TcpStream) {
-        let rpc = rpc_message.get_root::<rpc::Reader>();
+        let rpc = rpc_message.get_root::<rpc::Reader>().unwrap(); // TODO: error handling
         let mut response_message = MallocMessageBuilder::new_default();
 
         match rpc.which() {
-            Ok(rpc::AppendEntries(request)) => self.apply_append_entries_request(request, &mut response_message),
-            Ok(rpc::RequestVote(request_vote_request)) => self.apply_request_vote_request(request_vote_request, &mut response_message),
+            Ok(rpc::AppendEntries(request)) => self.apply_append_entries_request(request.unwrap(), &mut response_message), // TODO: error handling
+            Ok(rpc::RequestVote(request_vote_request)) => self.apply_request_vote_request(request_vote_request.unwrap(), &mut response_message), // TODO: error handling
             Err(_) => {
                 let mut response = response_message.init_root::<append_entries_response::Builder>();
                 response.set_internal_error("RPC type not recognized");
@@ -189,12 +189,12 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
                             response.set_inconsistent_prev_entry(());
                         } else {
 
-                            let entries = request.get_entries();
+                            let entries = rpc_try!(response, request.get_entries());
                             let num_entries = entries.len();
                             if num_entries > 0 {
                                 let mut entries_vec = Vec::with_capacity(num_entries as usize);
                                 for i in 0..num_entries as u32 {
-                                    entries_vec.push((leader_term, entries.get(i)));
+                                    entries_vec.push((leader_term, entries.get(i).unwrap())); // TODO: error handling
                                 }
 
                                 rpc_try!(response, self.store.append_entries(prev_log_index + 1, &entries_vec));
@@ -234,7 +234,7 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
                 rpc_try!(response, self.store.set_current_term(candidate_term));
             }
             // TODO: this should use rpc_try!, but std::net::parser::ParseError currently does not impl Error
-            let candidate = match SocketAddr::from_str(request.get_candidate()) {
+            let candidate = match SocketAddr::from_str(rpc_try!(response, request.get_candidate())) {
                 Ok(addr) => addr,
                 Err(_) => {
                     response.set_internal_error("Unable to parse candidate socket address");
