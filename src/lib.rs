@@ -10,6 +10,7 @@
 
 extern crate capnp;
 extern crate rand;
+extern crate threadpool;
 #[macro_use] extern crate log;
 
 macro_rules! rpc_try {
@@ -31,6 +32,7 @@ mod event;
 mod messenger;
 mod node;
 mod state_machine;
+mod transport;
 
 use std::result;
 use std::num::Int;

@@ -1,6 +1,5 @@
 use std::{error, result};
 use std::io;
-use std::slice::SliceExt;
 use std::sync::mpsc;
 
 pub trait StateMachine: Send + 'static {

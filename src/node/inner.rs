@@ -144,7 +144,7 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
         }
     }
 
-    fn apply_rpc(&mut self, rpc_message: OwnedSpaceMessageReader, connection: TcpStream) {
+    fn apply_rpc(&mut self, rpc_message: OwnedSpaceMessageReader, mut connection: TcpStream) {
         let rpc = rpc_message.get_root::<rpc::Reader>().unwrap(); // TODO: error handling
         let mut response_message = MallocMessageBuilder::new_default();
 
@@ -157,7 +157,7 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
             }
         }
 
-        serialize_packed::write_packed_message_unbuffered(&mut capnp::io::WriteOutputStream::new(connection),
+        serialize_packed::write_packed_message_unbuffered(&mut connection,
                                                           &mut response_message)
                          .unwrap(); // TODO: error handling
     }

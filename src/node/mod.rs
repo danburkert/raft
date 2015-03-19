@@ -109,8 +109,7 @@ impl <S, P> Drop for Node<S, P> where S: StateMachine {
 fn handle_rpc(stream: io::Result<TcpStream>, event_channel: &mpsc::SyncSender<Event>) {
     match stream {
         Ok(connection) => {
-            let mut input_stream = capnp::io::ReadInputStream::new(connection.try_clone().unwrap()); // TODO: error handling
-            let message = serialize_packed::new_reader_unbuffered(&mut input_stream, ReaderOptions::new());
+            let message = serialize_packed::new_reader_unbuffered(&connection, ReaderOptions::new());
             match message {
                 Ok(message) => {
                     let event = Event::Rpc { message: message, connection: connection };
