@@ -6,7 +6,7 @@ use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::io;
 use std::sync::mpsc;
 
-use capnp::{self, serialize_packed, ReaderOptions};
+use capnp::{serialize_packed, ReaderOptions};
 
 use node::inner::InnerNode;
 use store::Store;
@@ -27,7 +27,7 @@ pub struct Node<S, P> where S: StateMachine {
     /// Shutdown hook
     event_channel: mpsc::SyncSender<Event>,
 
-    socket_addr: SocketAddr,
+    local_addr: SocketAddr,
 
     _state_machine: marker::PhantomData<S>,
 
@@ -50,10 +50,10 @@ impl <S, P> Node<S, P> where S: StateMachine, P: Store {
 
         let (event_tx, event_rx) = mpsc::sync_channel::<Event>(128);
 
-        let socket_addr;
+        let local_addr;
         let rpc_listener = {
             let socket = try!(TcpListener::bind(&address));
-            socket_addr = try!(socket.socket_addr());
+            local_addr = try!(socket.local_addr());
             let event_channel = event_tx.clone();
 
             thread::spawn(move || {
@@ -78,20 +78,20 @@ impl <S, P> Node<S, P> where S: StateMachine, P: Store {
             rpc_listener: rpc_listener,
             event_loop: event_loop,
             event_channel: event_tx,
-            socket_addr: socket_addr,
+            local_addr: local_addr,
             _state_machine: marker::PhantomData,
             _persistent_state: marker::PhantomData,
         })
     }
 
-    pub fn socket_addr(&self) -> &SocketAddr {
-        &self.socket_addr
+    pub fn local_addr(&self) -> &SocketAddr {
+        &self.local_addr
     }
 }
 
 impl <S, P> fmt::Debug for Node<S, P> where S: StateMachine {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        format!("Node({})", self.socket_addr).fmt(f)
+        format!("Node({})", self.local_addr).fmt(f)
     }
 }
 

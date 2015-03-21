@@ -2,8 +2,6 @@
 
 #![feature(
     core,
-    io,
-    net,
     std_misc,
     unsafe_destructor,
 )]
@@ -12,6 +10,7 @@ extern crate capnp;
 extern crate rand;
 extern crate threadpool;
 #[macro_use] extern crate log;
+#[cfg(test)] extern crate env_logger;
 
 macro_rules! rpc_try {
     ($response:expr, $expr:expr) => ({

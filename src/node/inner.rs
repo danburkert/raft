@@ -4,7 +4,7 @@ use std::str::FromStr;
 use std::error::Error;
 
 use capnp::serialize::OwnedSpaceMessageReader;
-use capnp::{self, serialize_packed, MessageBuilder, MessageReader, MallocMessageBuilder};
+use capnp::{serialize_packed, MessageBuilder, MessageReader, MallocMessageBuilder};
 
 use messages_capnp::{
     append_entries_response,
@@ -270,7 +270,7 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
                             }
                         }
                     },
-                    Ok(request_vote_response::StaleTerm(term)) => {
+                    Ok(request_vote_response::StaleTerm(_)) => {
                         None
                     },
                     Ok(request_vote_response::AlreadyVoted(_)) => {
@@ -279,7 +279,7 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
                     Ok(request_vote_response::InconsistentLog(_)) => {
                         None
                     },
-                    Ok(request_vote_response::InternalError(error)) => {
+                    Ok(request_vote_response::InternalError(_)) => {
                         None
                     },
                     Err(_) => {
@@ -301,11 +301,11 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
         match response.which() {
             Ok(append_entries_response::Success(_)) => {
             },
-            Ok(append_entries_response::StaleTerm(term)) => {
+            Ok(append_entries_response::StaleTerm(_)) => {
             },
             Ok(append_entries_response::InconsistentPrevEntry(_)) => {
             },
-            Ok(append_entries_response::InternalError(error)) => {
+            Ok(append_entries_response::InternalError(_)) => {
             },
             Err(_) => error!("Append Entries Response type not recognized"),
         }
@@ -315,5 +315,6 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
 }
 
 fn quorum(num_peers: usize) -> usize {
-    0
+    // TODO: is this numerically stable?
+    (num_peers + 2) >> 1
 }

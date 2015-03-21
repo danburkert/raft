@@ -13,3 +13,6 @@ build = "build.rs"
   log = "*"
   rand = "*"
   threadpool = "*"
+
+[dev-dependencies]
+  env_logger = "*"

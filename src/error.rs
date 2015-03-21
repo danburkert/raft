@@ -17,7 +17,7 @@ impl <S> error::Error for Error<S> where S: StateMachine {
         match *self {
             Error::StateMachine(ref error) => error.description(),
             Error::Capnp(ref error) => error.description(),
-            Error::Io(ref error) => error.description(),
+            Error::Io(ref error) => error::Error::description(error),
         }
     }
 }
