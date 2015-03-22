@@ -128,6 +128,12 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
         }
     }
 
+    fn quorum(&self) -> usize {
+        let peers = self.peers.len();
+        let cluster_members = peers.checked_add(1).expect(&format!("unable to support {} cluster members", peers));
+        (cluster_members >> 1) + 1
+    }
+
     /// Apply a Raft event to this inner node.
     pub fn apply(&mut self, event: Event) {
         match event {
@@ -247,7 +253,7 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
     }
 
     fn apply_request_vote_response(&mut self, response: request_vote_response::Reader) {
-
+        let quorum = self.quorum();
         let new_state: Option<NodeState> = match self.node_state {
             NodeState::Candidate(ref mut state) => {
                 match response.which() {
@@ -261,7 +267,7 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
                         } else {
                             state.granted_votes = state.granted_votes + 1;
 
-                            if state.granted_votes > quorum(self.peers.len() + 1) {
+                            if state.granted_votes > quorum {
                                 // Transition to leader
                                 let latest_index = self.store.latest_index().unwrap(); // TODO: error handling
                                 Some(NodeState::Leader(LeaderState::new(latest_index)))
@@ -312,9 +318,4 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
     }
 
     fn shutdown(&mut self) { }
-}
-
-fn quorum(num_peers: usize) -> usize {
-    // TODO: is this numerically stable?
-    (num_peers + 2) >> 1
 }
