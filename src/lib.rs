@@ -28,7 +28,6 @@ pub mod store;
 
 mod error;
 mod event;
-mod messenger;
 mod node;
 mod state_machine;
 mod transport;
