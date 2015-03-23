@@ -3,6 +3,8 @@ use std::sync::mpsc;
 
 use threadpool::ThreadPool;
 
+use event::Event;
+
 use capnp::{
     self,
     serialize_packed,
@@ -13,48 +15,42 @@ use capnp::{
 
 pub trait Transport {
 
-    /// Send a message to a remote peer. The message will be delivered asynchronously. If sending
-    /// the message fails, then it will be automatically retried.
-    fn send(&self,
-            peer: SocketAddr,
-            message: MallocMessageBuilder)
-            -> mpsc::Receiver<OwnedSpaceMessageReader>;
+    /// Send an RPC message to a remote peer. The message will be delivered asynchronously. If
+    /// sending the message fails, then it will be automatically retried. The response will be
+    /// sent to the transport's channel.
+    fn send(&self, peer: SocketAddr, message: MallocMessageBuilder);
 }
 
 pub struct TcpTransport {
     threads: ThreadPool,
+    channel: mpsc::SyncSender<Event>,
 }
 
 impl TcpTransport {
 
-    fn new() -> TcpTransport {
+    fn new(channel: mpsc::SyncSender<Event>) -> TcpTransport {
         TcpTransport {
             threads: ThreadPool::new(16),
+            channel: channel,
         }
     }
 }
 
 impl Transport for TcpTransport {
 
-    fn send(&self,
-            peer: SocketAddr,
-            mut message: MallocMessageBuilder)
-            -> mpsc::Receiver<OwnedSpaceMessageReader> {
-
-        let (send, recv) = mpsc::channel::<OwnedSpaceMessageReader>();
-
+    fn send(&self, peer: SocketAddr, mut message: MallocMessageBuilder) {
+        let channel = self.channel.clone();
         self.threads.execute(move || {
             loop {
                 match send_tcp_rpc(&peer, &mut message) {
                     Ok(reader) => {
-                        let _ = send.send(reader);
+                        let _ = channel.send(Event::RpcResponse { message: reader });
                         break;
                     },
                     Err(error) => warn!("Retrying RPC to peer {}. Failure cause: {}", peer, error),
                 }
             }
         });
-        recv
     }
 }
 
@@ -71,7 +67,7 @@ fn send_tcp_rpc(peer: &SocketAddr,
 mod test_tcp {
 
     use std::net::TcpListener;
-    use super::{Transport, TcpTransport};
+    use std::sync::mpsc;
 
     use capnp::{
         serialize_packed,
@@ -82,6 +78,8 @@ mod test_tcp {
         ReaderOptions,
     };
 
+    use ::event::Event;
+    use super::{Transport, TcpTransport};
     use messages_capnp::{
         append_entries_response,
         append_entries_request,
@@ -112,7 +110,10 @@ mod test_tcp {
 
     #[test]
     fn send() {
+
         let _ = ::env_logger::init();
+
+        let (send, recv) = mpsc::sync_channel(10);
 
         let listener = TcpListener::bind("0.0.0.0:0").unwrap();
         let listener_addr = listener.local_addr().unwrap();
@@ -120,15 +121,18 @@ mod test_tcp {
         let req_msg = get_append_entries_request();
         let mut resp_msg = get_append_entries_response();
 
-        let transport = TcpTransport::new();
+        let transport = TcpTransport::new(send);
 
-        let resp_chan = transport.send(listener_addr, req_msg);
+        transport.send(listener_addr, req_msg);
         let (mut cxn, _) = listener.accept().unwrap();
 
         let req_reader = serialize_packed::new_reader_unbuffered(&cxn, ReaderOptions::new()).unwrap();
         serialize_packed::write_packed_message_unbuffered(&mut cxn, &mut resp_msg).unwrap();
 
-        let resp = resp_chan.recv().unwrap();
+        let resp = match recv.recv().unwrap() {
+            Event::RpcResponse { message } => message,
+            _ => panic!("unexpected event"),
+        };
 
         { // Check request
             let req = req_reader.get_root::<append_entries_request::Reader>().unwrap();
@@ -154,7 +158,10 @@ mod test_tcp {
 
     #[test]
     fn retry() {
+
         let _ = ::env_logger::init();
+
+        let (send, recv) = mpsc::sync_channel(10);
 
         let listener = TcpListener::bind("0.0.0.0:0").unwrap();
         let listener_addr = listener.local_addr().unwrap();
@@ -162,9 +169,9 @@ mod test_tcp {
         let req_msg = get_append_entries_request();
         let mut resp_msg = get_append_entries_response();
 
-        let transport = TcpTransport::new();
+        let transport = TcpTransport::new(send);
 
-        let resp_chan = transport.send(listener_addr, req_msg);
+        transport.send(listener_addr, req_msg);
         { // Accept connection and drop it
             let _ = listener.accept().unwrap();
         }
@@ -175,7 +182,10 @@ mod test_tcp {
         let req_reader = serialize_packed::new_reader_unbuffered(&cxn, ReaderOptions::new()).unwrap();
         serialize_packed::write_packed_message_unbuffered(&mut cxn, &mut resp_msg).unwrap();
 
-        let resp = resp_chan.recv().unwrap();
+        let resp = match recv.recv().unwrap() {
+            Event::RpcResponse { message } => message,
+            _ => panic!("unexpected event"),
+        };
 
         { // Check request
             let req = req_reader.get_root::<append_entries_request::Reader>().unwrap();

@@ -7,11 +7,12 @@ use capnp::serialize::OwnedSpaceMessageReader;
 use capnp::{serialize_packed, MessageBuilder, MessageReader, MallocMessageBuilder};
 
 use messages_capnp::{
-    append_entries_response,
     append_entries_request,
-    request_vote_response,
+    append_entries_response,
     request_vote_request,
-    rpc,
+    request_vote_response,
+    rpc_request,
+    rpc_response,
 };
 use event::Event;
 use LogIndex;
@@ -137,26 +138,19 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
     /// Apply a Raft event to this inner node.
     pub fn apply(&mut self, event: Event) {
         match event {
-            Event::Rpc { message, connection } => self.apply_rpc(message, connection),
-            Event::RequestVoteResponse { message } => {
-                let response = message.get_root::<request_vote_response::Reader>().unwrap(); // TODO: error handling
-                self.apply_request_vote_response(response)
-            },
-            Event::AppendEntriesResponse { message } => {
-                let response = message.get_root::<append_entries_response::Reader>().unwrap(); // TODO: error handling
-                self.apply_append_entries_response(response)
-            },
-            Event::Shutdown => self.shutdown()
+            Event::RpcRequest { message, connection } => self.rpc_request(message, connection),
+            Event::RpcResponse { message } => self.rpc_response(message),
+            Event::Shutdown => self.shutdown(),
         }
     }
 
-    fn apply_rpc(&mut self, rpc_message: OwnedSpaceMessageReader, mut connection: TcpStream) {
-        let rpc = rpc_message.get_root::<rpc::Reader>().unwrap(); // TODO: error handling
+    fn rpc_request(&mut self, message: OwnedSpaceMessageReader, mut connection: TcpStream) {
+        let rpc = message.get_root::<rpc_request::Reader>().unwrap(); // TODO: error handling
         let mut response_message = MallocMessageBuilder::new_default();
 
         match rpc.which() {
-            Ok(rpc::AppendEntries(request)) => self.apply_append_entries_request(request.unwrap(), &mut response_message), // TODO: error handling
-            Ok(rpc::RequestVote(request_vote_request)) => self.apply_request_vote_request(request_vote_request.unwrap(), &mut response_message), // TODO: error handling
+            Ok(rpc_request::AppendEntries(request)) => self.append_entries_request(request.unwrap(), &mut response_message), // TODO: error handling
+            Ok(rpc_request::RequestVote(request)) => self.request_vote_request(request.unwrap(), &mut response_message), // TODO: error handling
             Err(_) => {
                 let mut response = response_message.init_root::<append_entries_response::Builder>();
                 response.set_internal_error("RPC type not recognized");
@@ -168,9 +162,21 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
                          .unwrap(); // TODO: error handling
     }
 
-    fn apply_append_entries_request(&mut self,
-                                    request: append_entries_request::Reader,
-                                    response_message: &mut MallocMessageBuilder) {
+    fn rpc_response(&mut self, message: OwnedSpaceMessageReader) {
+        let rpc = message.get_root::<rpc_response::Reader>().unwrap(); // TODO: error handling
+
+        match rpc.which() {
+            Ok(rpc_response::Which::AppendEntries(Ok(response))) => self.append_entries_response(response),
+            Ok(rpc_response::Which::RequestVote(Ok(response))) => self.request_vote_response(response),
+            _ => {
+                error!("");
+            }
+        }
+    }
+
+    fn append_entries_request(&mut self,
+                              request: append_entries_request::Reader,
+                              response_message: &mut MallocMessageBuilder) {
         let leader_term = Term(request.get_term());
         let current_term = rpc_try!(response_message.init_root::<append_entries_response::Builder>(),
                                     self.store.current_term());
@@ -213,15 +219,15 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
                 NodeState::Candidate(..) | NodeState::Leader(..) => {
                     // recognize the new leader, return to follower state, and apply the entries
                     self.node_state = NodeState::Follower;
-                    return self.apply_append_entries_request(request, response_message)
+                    return self.append_entries_request(request, response_message)
                 },
             }
         }
     }
 
-    fn apply_request_vote_request(&mut self,
-                                  request: request_vote_request::Reader,
-                                  response_message: &mut MallocMessageBuilder) {
+    fn request_vote_request(&mut self,
+                            request: request_vote_request::Reader,
+                            response_message: &mut MallocMessageBuilder) {
         let mut response = response_message.init_root::<request_vote_response::Builder>();
 
         let candidate_term = Term(request.get_term());
@@ -252,7 +258,7 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
         }
     }
 
-    fn apply_request_vote_response(&mut self, response: request_vote_response::Reader) {
+    fn request_vote_response(&mut self, response: request_vote_response::Reader) {
         let quorum = self.quorum();
         let new_state: Option<NodeState> = match self.node_state {
             NodeState::Candidate(ref mut state) => {
@@ -303,7 +309,7 @@ impl <S, M> InnerNode<S, M> where S: Store, M: StateMachine {
         }
     }
 
-    fn apply_append_entries_response(&mut self, response: append_entries_response::Reader) {
+    fn append_entries_response(&mut self, response: append_entries_response::Reader) {
         match response.which() {
             Ok(append_entries_response::Success(_)) => {
             },

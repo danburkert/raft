@@ -3,14 +3,11 @@ use std::net::TcpStream;
 use capnp::serialize::OwnedSpaceMessageReader;
 
 pub enum Event {
-    Rpc {
+    RpcRequest {
         message: OwnedSpaceMessageReader,
         connection: TcpStream,
     },
-    RequestVoteResponse {
-        message: OwnedSpaceMessageReader,
-    },
-    AppendEntriesResponse {
+    RpcResponse {
         message: OwnedSpaceMessageReader,
     },
     Shutdown

@@ -1,9 +1,16 @@
 @0xbdca3d7c76dab735;
 
-struct Rpc {
+struct RpcRequest {
     union {
         appendEntries @0 :AppendEntriesRequest;
         requestVote @1 :RequestVoteRequest;
+    }
+}
+
+struct RpcResponse {
+    union {
+        appendEntries @0 :AppendEntriesResponse;
+        requestVote @1 :RequestVoteResponse;
     }
 }
 

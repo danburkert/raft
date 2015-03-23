@@ -112,7 +112,7 @@ fn handle_rpc(stream: io::Result<TcpStream>, event_channel: &mpsc::SyncSender<Ev
             let message = serialize_packed::new_reader_unbuffered(&connection, ReaderOptions::new());
             match message {
                 Ok(message) => {
-                    let event = Event::Rpc { message: message, connection: connection };
+                    let event = Event::RpcRequest { message: message, connection: connection };
                     event_channel.send(event).ok().expect("Event channel closed. Listener thread stopping.")
                 }
                 Err(error) => { warn!("{}", error) }
