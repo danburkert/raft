@@ -57,6 +57,8 @@ pub mod store;
 mod server;
 mod replica;
 mod state;
+mod transport;
+mod event;
 
 mod messages_capnp {
     #![allow(dead_code)]
