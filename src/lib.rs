@@ -47,9 +47,8 @@
 extern crate capnp;
 extern crate mio;
 extern crate rand;
-extern crate rustc_serialize;
-extern crate uuid;
 #[macro_use] extern crate log;
+#[cfg(test)] extern crate env_logger;
 
 pub mod state_machine;
 pub mod store;
@@ -60,7 +59,7 @@ mod state;
 mod transport;
 mod event;
 
-mod messages_capnp {
+pub mod messages_capnp {
     #![allow(dead_code)]
     include!(concat!(env!("OUT_DIR"), "/messages_capnp.rs"));
 }
@@ -71,7 +70,6 @@ use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::str::FromStr;
 
-use rustc_serialize::Encodable;
 // Data structures.
 use store::Store;
 use server::Server;
@@ -253,7 +251,7 @@ impl From<capnp::NotInSchema> for Error {
 }
 
 /// The term of a log entry.
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, RustcEncodable, RustcDecodable)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Term(u64);
 impl From<u64> for Term {
     fn from(val: u64) -> Term {
@@ -279,7 +277,7 @@ impl ops::Sub<u64> for Term {
 }
 
 /// The index of a log entry.
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, RustcEncodable, RustcDecodable)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LogIndex(u64);
 impl From<u64> for LogIndex {
     fn from(val: u64) -> LogIndex {

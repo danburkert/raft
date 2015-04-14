@@ -645,8 +645,8 @@ mod test {
 
         // Return success vote to candidate, and make sure it transitions to leader
         let respond = replica1.request_vote_response(replica2.addr().clone(),
-                                                          resp,
-                                                          request.init_root::<append_entries_request::Builder>());
+                                                     resp,
+                                                     request.init_root::<append_entries_request::Builder>());
         assert!(respond.is_some());
         assert!(replica1.is_leader());
         assert!(replica1.current_term() == Term::from(1));

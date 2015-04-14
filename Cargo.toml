@@ -9,13 +9,9 @@ capnpc = "*"
 
 [dependencies]
 capnp = "*"
-rustc-serialize = "*"
-uuid = "*"
-rand = "*"
 log = "*"
-
-[dependencies.mio]
-git = "https://github.com/carllerche/mio"
+mio = "*"
+rand = "*"
 
 [dev-dependencies]
 env_logger = "*"
