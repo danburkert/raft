@@ -343,21 +343,19 @@ mod test {
         let mut msg = MallocMessageBuilder::new_default();
         {
             let mut builder = msg.init_root::<client_response::Builder>();
-            builder.set_not_leader("foo");
+            builder.set_not_leader("leader_addr");
         }
         serialize_packed::write_message(&mut buf, &mut msg).unwrap();
+
+        buf.set_position(0);
 
         let response = serialize_packed::read_message(&mut buf, ReaderOptions::new()).unwrap();
         let response_msg = response.get_root::<client_response::Reader>().unwrap();
 
         match response_msg.which().unwrap() {
-            client_response::Which::Success(()) => unimplemented!(),
-            client_response::Which::NotLeader(Ok(leader)) => {
-                println!("got leader: {}", leader);
-            },
+            client_response::Which::Success(()) => panic!("expected NotLeader"),
+            client_response::Which::NotLeader(Ok(leader)) => assert_eq!(leader, "leader_addr"),
             client_response::Which::NotLeader(e) => panic!("Error reading response. {:?}", e),
         };
-
-        panic!("intentional panic");
     }
 }
