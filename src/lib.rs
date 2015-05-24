@@ -196,7 +196,9 @@ impl Raft {
 
         // Wait for a response.
         let response = try!(serialize_packed::read_message(&mut socket, ReaderOptions::new()));
+        println!("got response, trying to deserialize");
         let client_res = try!(response.get_root::<client_response::Reader>());
+        println!("response deserialized");
         // Set the current leader.
         self.current_leader = match try!(client_res.which()) {
             client_response::Which::Success(()) => unimplemented!(),
@@ -307,5 +309,55 @@ impl ops::Sub<u64> for LogIndex {
     type Output = LogIndex;
     fn sub(self, rhs: u64) -> LogIndex {
         LogIndex(self.0.checked_sub(rhs).expect("underflow while decrementing LogIndex"))
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use std::io::Cursor;
+
+    use capnp::serialize_packed;
+    use capnp::{
+        NotInSchema,
+        MessageBuilder,
+        MessageReader,
+        ReaderOptions,
+        MallocMessageBuilder,
+        OwnedSpaceMessageReader,
+    };
+    use messages_capnp::{
+        rpc_request,
+        rpc_response,
+        client_request,
+        client_response,
+        request_vote_response,
+        append_entries_response,
+        append_entries_request,
+    };
+    use super::{Error, Result};
+
+    #[test]
+    fn test_capnp_issue() {
+        let mut buf = Cursor::new(Vec::new());
+        let mut msg = MallocMessageBuilder::new_default();
+        {
+            let mut builder = msg.init_root::<client_response::Builder>();
+            builder.set_not_leader("foo");
+        }
+        serialize_packed::write_message(&mut buf, &mut msg).unwrap();
+
+        let response = serialize_packed::read_message(&mut buf, ReaderOptions::new()).unwrap();
+        let response_msg = response.get_root::<client_response::Reader>().unwrap();
+
+        match response_msg.which().unwrap() {
+            client_response::Which::Success(()) => unimplemented!(),
+            client_response::Which::NotLeader(Ok(leader)) => {
+                println!("got leader: {}", leader);
+            },
+            client_response::Which::NotLeader(e) => panic!("Error reading response. {:?}", e),
+        };
+
+        panic!("intentional panic");
     }
 }
