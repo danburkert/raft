@@ -167,7 +167,13 @@ impl<L, M> Server<L, M> where L: Log, M: StateMachine {
                        event_loop: &mut EventLoop<Server<L, M>>,
                        actions: Actions) {
         scoped_debug!("executing actions: {:?}", actions);
-        let Actions { peer_messages, client_messages, timeouts, clear_timeouts } = actions;
+        let Actions {
+            peer_messages,
+            client_messages,
+            timeouts,
+            clear_timeouts,
+            clear_peer_messages,
+        } = actions;
 
         for (peer, message) in peer_messages {
             let token = self.peer_tokens[&peer];
@@ -205,6 +211,11 @@ impl<L, M> Server<L, M> where L: Log, M: StateMachine {
                 .insert(timeout, handle)
                 .map(|handle| scoped_assert!(event_loop.clear_timeout(handle),
                                              "unable to clear timeout: {:?}", timeout));
+        }
+        if clear_peer_messages {
+            for &token in self.peer_tokens.values() {
+                self.connections[token].clear_messages();
+            }
         }
     }
 

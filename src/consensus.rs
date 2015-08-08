@@ -70,10 +70,12 @@ pub struct Actions {
     pub peer_messages: Vec<(ServerId, Rc<MallocMessageBuilder>)>,
     /// Messages to be send to clients.
     pub client_messages: Vec<(ClientId, Rc<MallocMessageBuilder>)>,
-    /// Whether or not to clear timeouts associated.
+    /// Whether to clear existing consensus timeouts.
     pub clear_timeouts: bool,
     /// Any new timeouts to create.
     pub timeouts: Vec<ConsensusTimeout>,
+    /// Whether to clear outbound peer messages.
+    pub clear_peer_messages: bool,
 }
 
 impl fmt::Debug for Actions {
@@ -98,6 +100,7 @@ impl Actions {
             client_messages: vec![],
             clear_timeouts: false,
             timeouts: vec![],
+            clear_peer_messages: false,
         }
     }
 }
@@ -247,15 +250,12 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
             },
             ConsensusState::Candidate => {
                 // Resend the request vote request if a response has not yet been receieved.
-                if self.candidate_state.peer_voted(peer) { return; }
-                let current_term = self.current_term();
-                let latest_index = self.latest_log_index();
-                let latest_term = self.persistent_log.latest_log_term().unwrap();
-
-                let message = messages::request_vote_request(self.current_term(),
-                                                             self.latest_log_index(),
-                                                             self.persistent_log.latest_log_term().unwrap());
-                actions.peer_messages.push((peer, message));
+                if !self.candidate_state.peer_voted(peer) {
+                    let message = messages::request_vote_request(self.current_term(),
+                                                                 self.latest_log_index(),
+                                                                 self.persistent_log.latest_log_term().unwrap());
+                    actions.peer_messages.push((peer, message));
+                }
             },
             ConsensusState::Follower => {
                 // No message is necessary; if the peer is a leader or candidate they will send a
