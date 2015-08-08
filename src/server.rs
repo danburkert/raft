@@ -278,7 +278,10 @@ impl<L, M> Server<L, M> where L: Log, M: StateMachine {
                                 .remove(&prev_token)
                                 .map(|handle| scoped_assert!(event_loop.clear_timeout(handle)));
 
-                            // TODO: add reconnect messages from consensus
+                            // Notify consensus that messages may have been lost.
+                            let mut actions = Actions::new();
+                            self.consensus.peer_connection_reset(peer_id, &mut actions);
+                            self.execute_actions(event_loop, actions);
                         },
                         connection_preamble::id::Which::Client(Ok(id)) => {
                             let client_id = try!(ClientId::from_bytes(id));
@@ -399,15 +402,23 @@ impl<L, M> Handler for Server<L, M> where L: Log, M: StateMachine {
             ServerTimeout::Reconnect(token) => {
                 scoped_assert!(self.reconnection_timeouts.remove(&token).is_some(),
                                "{:?} missing timeout: {:?}", self.connections[token], timeout);
+                let id = match *self.connections[token].kind() {
+                    ConnectionKind::Peer(id) => id,
+                    _ => unreachable!(),
+                };
                 self.connections[token]
                     .reconnect_peer(self.id)
                     .and_then(|_| self.connections[token].register(event_loop, token))
+                    .map(|_| {
+                        let mut actions = Actions::new();
+                        self.consensus.peer_connection_reset(id, &mut actions);
+                        self.execute_actions(event_loop, actions);
+                    })
                     .unwrap_or_else(|error| {
                         scoped_warn!("unable to reconnect connection {:?}: {}",
                                      self.connections[token], error);
                         self.reset_connection(event_loop, token);
                     });
-                // TODO: add reconnect messages from consensus
             },
         }
     }
