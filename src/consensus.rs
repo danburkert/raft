@@ -87,8 +87,9 @@ impl fmt::Debug for Actions {
                                                  .iter().map(|client_message| client_message.0)
                                                  .collect();
         write!(fmt, "Actions {{ peer_messages: {:?}, client_messages: {:?}, \
-                     clear_timeouts: {:?}, timeouts: {:?} }}",
-               peer_messages, client_messages, self.clear_timeouts, self.timeouts)
+                     clear_timeouts: {:?}, timeouts: {:?}, clear_peer_messages: {} }}",
+               peer_messages, client_messages, self.clear_timeouts, self.timeouts,
+               self.clear_peer_messages)
     }
 }
 
@@ -269,7 +270,7 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
                               from: ServerId,
                               request: append_entries_request::Reader,
                               actions: &mut Actions) {
-        scoped_debug!("AppendEntriesRequest from Consensus({})", &from);
+        scoped_trace!("AppendEntriesRequest from peer {}", &from);
 
         let leader_term = Term(request.get_term());
         let current_term = self.current_term();
@@ -296,7 +297,8 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
 
                     let latest_log_index = self.latest_log_index();
                     if latest_log_index < leader_prev_log_index {
-                        scoped_debug!("AppendEntriesRequest: inconsistent previous log index: leader: {}, local: {}",
+                        scoped_debug!("AppendEntriesRequest: inconsistent previous log index: \
+                                      leader: {}, local: {}",
                                       leader_prev_log_index, latest_log_index);
                         messages::append_entries_response_inconsistent_prev_entry(self.current_term())
                     } else {
@@ -307,12 +309,14 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
                         };
 
                         if existing_term != leader_prev_log_term {
-                            scoped_debug!("AppendEntriesRequest: inconsistent previous log term: leader: {}, local: {}",
+                            scoped_debug!("AppendEntriesRequest: inconsistent previous log term: \
+                                          leader term: {}, local term: {}",
                                           leader_prev_log_term, existing_term);
                             messages::append_entries_response_inconsistent_prev_entry(self.current_term())
                         } else {
                             let entries = request.get_entries().unwrap();
                             let num_entries = entries.len();
+                            scoped_debug!("AppendEntriesRequest: {} entries from leader: {}", num_entries, from);
                             if num_entries > 0 {
                                 let mut entries_vec = Vec::with_capacity(num_entries as usize);
                                 for i in 0..num_entries {
@@ -324,7 +328,6 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
                             // We are matching the leaders log up to and including `latest_log_index`.
                             self.commit_index = cmp::min(leader_commit_index, latest_log_index);
                             self.apply_commits();
-                            scoped_debug!("all looks fine, responding success to Leader");
                             messages::append_entries_response_success(self.current_term(), self.persistent_log.latest_log_index().unwrap())
                         }
                     }
@@ -364,8 +367,6 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
                                from: ServerId,
                                response: append_entries_response::Reader,
                                actions: &mut Actions) {
-        scoped_debug!("AppendEntriesResponse from Consensus({})", from);
-
         let local_term = self.current_term();
         let responder_term = Term::from(response.get_term());
         let local_latest_log_index = self.latest_log_index();
@@ -376,12 +377,13 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
 
             // The responder is not necessarily the leader, but it is somewhat likely, so we will
             // use it as the leader hint.
-            scoped_info!("received AppendEntriesResponse from Consensus {{ id: {}, term: {} }} \
-                         with newer term", from, responder_term);
+            scoped_info!("AppendEntriesResponse from peer {} with newer term: {}",
+                         from, responder_term);
             self.transition_to_follower(responder_term, from, actions);
             return;
         } else if local_term > responder_term {
-            scoped_debug!("responder is responding to a different term, ignoring");
+            scoped_debug!("AppendEntriesResponse from peer {} with a different term: {}",
+                          from, responder_term);
             // Responder is responding to an AppendEntries request from a different term. Ignore
             // the response.
             return;
@@ -389,7 +391,7 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
 
         match response.which() {
             Ok(append_entries_response::Which::Success(follower_latest_log_index)) => {
-                scoped_debug!("responder is responding success");
+                scoped_trace!("AppendEntriesResponse from peer {}: success", from);
                 scoped_assert!(self.is_leader());
                 let follower_latest_log_index = LogIndex::from(follower_latest_log_index);
                 scoped_assert!(follower_latest_log_index <= local_latest_log_index);
@@ -397,7 +399,7 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
                 self.advance_commit_index(actions);
             }
             Ok(append_entries_response::Which::InconsistentPrevEntry(..)) => {
-                scoped_debug!("responder had inconsistent previous entry, rolling it back one");
+                scoped_debug!("AppendEntriesResponse from peer {}: inconsistent previous entry", from);
                 scoped_assert!(self.is_leader());
                 let next_index = self.leader_state.next_index(&from) - 1;
                 self.leader_state.set_next_index(from, next_index);
@@ -406,15 +408,16 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
                 // The peer is reporting a stale term, but the term number matches the local term.
                 // Ignore the response, since it is to a message from a prior term, and this server
                 // has already transitioned to the new term.
+                scoped_debug!("AppendEntriesResponse from peer {}: stale term (outdated)", from);
                 return;
             }
             Ok(append_entries_response::Which::InternalError(error_result)) => {
                 let error = error_result.unwrap_or("[unable to decode internal error]");
-                scoped_warn!("AppendEntries.InternalError response from Consensus({}): {}",
+                scoped_warn!("AppendEntriesResponse from peer {}: internal error: {}",
                              from, error);
             }
             Err(error) => {
-                scoped_warn!("Error decoding AppendEntriesResponse from Consensus({}): {}",
+                scoped_warn!("AppendEntriesResponse from peer {}: unable to deserialize response: {}",
                              from, error);
             }
         }
@@ -422,7 +425,8 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
         let next_index = self.leader_state.next_index(&from);
         if next_index <= local_latest_log_index {
             // If the peer is behind, send it entries to catch up.
-            scoped_debug!("responder is behind, catching them up");
+            scoped_debug!("AppendEntriesResponse: peer {} is missing {} entries",
+                          from, (local_latest_log_index - next_index.0).0);
             let prev_log_index = next_index - 1;
             let prev_log_term =
                 if prev_log_index == LogIndex(0) {
@@ -451,7 +455,7 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
             actions.peer_messages.push((from, Rc::new(message)));
         } else {
             // If the peer is caught up, set a heartbeat timeout.
-            scoped_debug!("responder is caught up");
+            scoped_trace!("AppendEntriesResponse: scheduling heartbeat for peer {}", from);
             let timeout = ConsensusTimeout::Heartbeat(from);
             actions.timeouts.push(timeout);
         }
@@ -506,7 +510,7 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
                              from: ServerId,
                              response: request_vote_response::Reader,
                              actions: &mut Actions) {
-        scoped_debug!("RequestVoteResponse from Consensus({})", from);
+        scoped_debug!("RequestVoteResponse from peer {}", from);
 
         let local_term = self.current_term();
         let voter_term = Term::from(response.get_term());
@@ -529,6 +533,8 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
             if let Ok(request_vote_response::Granted(_)) = response.which() {
                 self.candidate_state.record_vote(from.clone());
                 if self.candidate_state.count_votes() >= majority {
+                    scoped_info!("election for term {} won; transitioning to Leader",
+                                 local_term);
                     self.transition_to_leader(actions);
                 }
             }
@@ -540,8 +546,6 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
                         from: ClientId,
                         request: proposal_request::Reader,
                         actions: &mut Actions) {
-        scoped_trace!("proposal from Client({})", from);
-
         if self.is_candidate() || (self.is_follower() && self.follower_state.leader.is_none()) {
             actions.client_messages.push((from.into(), messages::command_response_unknown_leader()));
         } else if self.is_follower() {
@@ -558,10 +562,9 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
             self.persistent_log.append_entries(log_index,
                                       &[(term, entry)]).unwrap();
             self.leader_state.proposals.push_back((from, log_index));
-
+            scoped_debug!("ProposalRequest from client {}: sending entry {} to peers",
+                          from, log_index);
             if self.peers.len() == 0 {
-                scoped_debug!("is single node cluster, advancing commit index");
-                // In a single node cluster, can advance right away.
                 self.advance_commit_index(actions);
             } else {
                 let message = messages::append_entries_request(term,
@@ -569,9 +572,7 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
                                                                prev_log_term,
                                                                &[entry],
                                                                self.commit_index);
-                // In a multi-node cluster must message peers and wait.
                 for &peer in self.peers.keys() {
-                    scoped_debug!("queuing message for peer {}", peer);
                     if self.leader_state.next_index(&peer) == prev_log_index + 1 {
                         actions.peer_messages.push((peer, message.clone()));
                     }
@@ -604,8 +605,8 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
 
     /// Triggers a heartbeat timeout for the peer.
     fn heartbeat_timeout(&mut self, peer: ServerId, actions: &mut Actions) {
-        scoped_debug!("HeartbeatTimeout");
         scoped_assert!(self.is_leader());
+        scoped_debug!("HeartbeatTimeout for peer: {}", peer);
         let mut message = MallocMessageBuilder::new_default();
         {
             let mut request = message.init_root::<message::Builder>()
@@ -621,11 +622,10 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
 
     /// Triggers an election timeout.
     fn election_timeout(&mut self, actions: &mut Actions) {
-        scoped_info!("ElectionTimeout");
         scoped_assert!(!self.is_leader());
         if self.peers.is_empty() {
             // Solitary consensus module special case; jump straight to leader status
-            scoped_info!("transitioning to Leader");
+            scoped_info!("ElectionTimeout: transitioning to Leader");
             scoped_assert!(self.is_follower());
             scoped_assert!(self.persistent_log.voted_for().unwrap().is_none());
             self.persistent_log.inc_current_term().unwrap();
@@ -634,13 +634,14 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
             self.state = ConsensusState::Leader;
             self.leader_state.reinitialize(latest_log_index);
         } else {
+            scoped_info!("ElectionTimeout: transitioning to Candidate");
             self.transition_to_candidate(actions);
         }
     }
 
     /// Transitions this consensus state machine to Leader.
     fn transition_to_leader(&mut self, actions: &mut Actions) {
-        scoped_info!("transitioning to Leader");
+        scoped_trace!("transitioning to Leader");
         let current_term = self.current_term();
         let latest_log_index = self.latest_log_index();
         let latest_log_term = self.persistent_log.latest_log_term().unwrap();
@@ -686,7 +687,7 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
         while self.commit_index < self.persistent_log.latest_log_index().unwrap() {
             if self.leader_state.count_match_indexes(self.commit_index + 1) >= majority {
                 self.commit_index = self.commit_index + 1;
-                scoped_debug!("advanced commit index to {}", self.commit_index);
+                scoped_debug!("commit index advanced to {}", self.commit_index);
             } else {
                 break; // If there isn't a majority now, there won't be one later.
             }
@@ -696,9 +697,9 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
 
         while let Some(&(client, index)) = self.leader_state.proposals.get(0) {
             if index <= self.commit_index {
-                scoped_debug!("responding to client");
-                // We know that there will be an index here since it was commited and the index is
-                // less than that which has been commited.
+                scoped_trace!("responding to client {} for entry {}", client, index);
+                // We know that there will be an index here since it was commited
+                // and the index is less than that which has been commited.
                 let result = results.get(&index).unwrap();
                 let message = messages::command_response_success(result);
                 actions.client_messages.push((client, message));

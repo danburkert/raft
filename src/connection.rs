@@ -124,6 +124,10 @@ impl Connection {
         self.kind = kind;
     }
 
+    pub fn addr(&self) -> &SocketAddr {
+        &self.addr
+    }
+
     /// Writes queued messages to the socket.
     pub fn writable(&mut self) -> Result<()> {
         scoped_trace!("{:?}: writable; queued message count: {}", self, self.write_queue.len());
