@@ -86,9 +86,14 @@ impl Log for MemLog {
         }
     }
 
-    fn entry(&self, index: LogIndex) -> result::Result<(Term, &[u8]), Error> {
-        let (term, ref bytes) = self.entries[Into::<u64>::into(index) as usize - 1];
-        Ok((term, &bytes))
+    fn entry(&self, index: LogIndex) -> result::Result<&[u8], Error> {
+        let (_, ref bytes) = self.entries[Into::<u64>::into(index) as usize - 1];
+        Ok(&bytes)
+    }
+
+    fn entry_term(&self, index: LogIndex) -> result::Result<Term, Error> {
+        let (term, _) = self.entries[Into::<u64>::into(index) as usize - 1];
+        Ok(term)
     }
 
     fn append_entries(&mut self,
@@ -143,24 +148,37 @@ mod test {
                                             (Term::from(1), &[4])]).unwrap();
         assert_eq!(LogIndex::from(4), store.latest_log_index().unwrap());
         assert_eq!(Term::from(1), store.latest_log_term().unwrap());
-        assert_eq!((Term::from(0), &*vec![1u8]), store.entry(LogIndex::from(1)).unwrap());
-        assert_eq!((Term::from(0), &*vec![2u8]), store.entry(LogIndex::from(2)).unwrap());
-        assert_eq!((Term::from(0), &*vec![3u8]), store.entry(LogIndex::from(3)).unwrap());
-        assert_eq!((Term::from(1), &*vec![4u8]), store.entry(LogIndex::from(4)).unwrap());
+        assert_eq!(&*vec![1u8], store.entry(LogIndex::from(1)).unwrap());
+        assert_eq!(&*vec![2u8], store.entry(LogIndex::from(2)).unwrap());
+        assert_eq!(&*vec![3u8], store.entry(LogIndex::from(3)).unwrap());
+        assert_eq!(&*vec![4u8], store.entry(LogIndex::from(4)).unwrap());
+        assert_eq!(Term::from(0), store.entry_term(LogIndex::from(1)).unwrap());
+        assert_eq!(Term::from(0), store.entry_term(LogIndex::from(2)).unwrap());
+        assert_eq!(Term::from(0), store.entry_term(LogIndex::from(3)).unwrap());
+        assert_eq!(Term::from(1), store.entry_term(LogIndex::from(4)).unwrap());
 
         store.append_entries(LogIndex::from(4), &[]).unwrap();
         assert_eq!(LogIndex(3), store.latest_log_index().unwrap());
         assert_eq!(Term::from(0), store.latest_log_term().unwrap());
-        assert_eq!((Term::from(0), &*vec![1u8]), store.entry(LogIndex::from(1)).unwrap());
-        assert_eq!((Term::from(0), &*vec![2u8]), store.entry(LogIndex::from(2)).unwrap());
-        assert_eq!((Term::from(0), &*vec![3u8]), store.entry(LogIndex::from(3)).unwrap());
+        assert_eq!(&*vec![1u8], store.entry(LogIndex::from(1)).unwrap());
+        assert_eq!(&*vec![2u8], store.entry(LogIndex::from(2)).unwrap());
+        assert_eq!(&*vec![3u8], store.entry(LogIndex::from(3)).unwrap());
+        assert_eq!(Term::from(0), store.entry_term(LogIndex::from(1)).unwrap());
+        assert_eq!(Term::from(0), store.entry_term(LogIndex::from(2)).unwrap());
+        assert_eq!(Term::from(0), store.entry_term(LogIndex::from(3)).unwrap());
 
         store.append_entries(LogIndex::from(3), &[(Term(2), &[3]), (Term(3), &[4])]).unwrap();
         assert_eq!(LogIndex(4), store.latest_log_index().unwrap());
         assert_eq!(Term::from(3), store.latest_log_term().unwrap());
-        assert_eq!((Term::from(0), &*vec![1u8]), store.entry(LogIndex::from(1)).unwrap());
-        assert_eq!((Term::from(0), &*vec![2u8]), store.entry(LogIndex::from(2)).unwrap());
-        assert_eq!((Term::from(2), &*vec![3u8]), store.entry(LogIndex::from(3)).unwrap());
-        assert_eq!((Term::from(3), &*vec![4u8]), store.entry(LogIndex::from(4)).unwrap());
+
+        assert_eq!(&*vec![1u8], store.entry(LogIndex::from(1)).unwrap());
+        assert_eq!(&*vec![2u8], store.entry(LogIndex::from(2)).unwrap());
+        assert_eq!(&*vec![3u8], store.entry(LogIndex::from(3)).unwrap());
+        assert_eq!(&*vec![4u8], store.entry(LogIndex::from(4)).unwrap());
+
+        assert_eq!(Term::from(0), store.entry_term(LogIndex::from(1)).unwrap());
+        assert_eq!(Term::from(0), store.entry_term(LogIndex::from(2)).unwrap());
+        assert_eq!(Term::from(2), store.entry_term(LogIndex::from(3)).unwrap());
+        assert_eq!(Term::from(3), store.entry_term(LogIndex::from(4)).unwrap());
     }
 }

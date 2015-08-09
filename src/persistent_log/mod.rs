@@ -48,8 +48,15 @@ pub trait Log: Clone + Debug + Send + 'static {
     ///
     /// # Panic
     ///
-    /// This method will panic if the index greater than the largest index.
-    fn entry(&self, index: LogIndex) -> result::Result<(Term, &[u8]), Self::Error>;
+    /// This method will panic if the entry does not exist.
+    fn entry(&self, index: LogIndex) -> result::Result<&[u8], Self::Error>;
+
+    /// Returns the term of the entry at the provided log index.
+    ///
+    /// # Panic
+    ///
+    /// This method will panic if the entry does not exist.
+    fn entry_term(&self, index: LogIndex) -> result::Result<Term, Self::Error>;
 
     /// Appends the provided entries to the log beginning at the given index.
     fn append_entries(&mut self, from: LogIndex, entries: &[(Term, &[u8])]) -> result::Result<(), Self::Error>;

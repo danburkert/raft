@@ -227,7 +227,7 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
                     if prev_log_index == 0 {
                         Term(0)
                     } else {
-                        self.persistent_log.entry(LogIndex(prev_log_index)).unwrap().0
+                        self.persistent_log.entry_term(LogIndex(prev_log_index)).unwrap()
                     };
 
                 let mut message = MallocMessageBuilder::new_default();
@@ -242,7 +242,7 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
 
                     let mut entries = request.init_entries((until_index - from_index) as u32);
                     for (n, index) in (from_index..until_index).enumerate() {
-                        entries.set(n as u32, self.persistent_log.entry(LogIndex::from(index)).unwrap().1);
+                        entries.set(n as u32, self.persistent_log.entry(LogIndex::from(index)).unwrap());
                     }
                 }
                 self.leader_state.set_next_index(peer, LogIndex(until_index));
@@ -303,7 +303,7 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
                         let existing_term = if leader_prev_log_index == LogIndex::from(0) {
                             Term::from(0)
                         } else {
-                            self.persistent_log.entry(leader_prev_log_index).unwrap().0
+                            self.persistent_log.entry_term(leader_prev_log_index).unwrap()
                         };
 
                         if existing_term != leader_prev_log_term {
@@ -428,7 +428,7 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
                 if prev_log_index == LogIndex(0) {
                     Term(0)
                 } else {
-                    self.persistent_log.entry(prev_log_index).unwrap().0
+                    self.persistent_log.entry_term(prev_log_index).unwrap()
                 };
 
             let mut message = MallocMessageBuilder::new_default();
@@ -444,7 +444,7 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
                 let until_index = Into::<u64>::into(local_latest_log_index) + 1;
                 let mut entries = request.init_entries((until_index - from_index) as u32);
                 for (n, index) in (from_index..until_index).enumerate() {
-                    entries.set(n as u32, self.persistent_log.entry(LogIndex::from(index)).unwrap().1);
+                    entries.set(n as u32, self.persistent_log.entry(LogIndex::from(index)).unwrap());
                 }
             }
             self.leader_state.set_next_index(from, local_latest_log_index + 1);
@@ -715,7 +715,7 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
         let mut results = HashMap::new();
         while self.last_applied < self.commit_index {
             // Unwrap justified here since we know there is an entry here.
-            let (_, entry) = self.persistent_log.entry(self.last_applied + 1).unwrap();
+            let entry = self.persistent_log.entry(self.last_applied + 1).unwrap();
 
             if !entry.is_empty() {
                 let result = self.state_machine.apply(entry);
@@ -1036,7 +1036,8 @@ mod tests {
             let client_messages = apply_actions(leader, actions, &mut consensus_modules);
             assert_eq!(1, client_messages.len());
             for module in consensus_modules.values() {
-                assert_eq!((Term(1), value), module.persistent_log.entry(LogIndex(1)).unwrap());
+                assert_eq!(value, module.persistent_log.entry(LogIndex(1)).unwrap());
+                assert_eq!(Term(1), module.persistent_log.entry_term(LogIndex(1)).unwrap());
             }
         }
     }
@@ -1063,7 +1064,8 @@ mod tests {
             let client_messages = apply_actions(leader, actions, &mut consensus_modules);
             assert_eq!(1, client_messages.len());
             for module in consensus_modules.values() {
-                assert_eq!((Term(1), value), module.persistent_log.entry(LogIndex(1)).unwrap());
+                assert_eq!(value, module.persistent_log.entry(LogIndex(1)).unwrap());
+                assert_eq!(Term(1), module.persistent_log.entry_term(LogIndex(1)).unwrap());
             }
         })
     }
@@ -1090,7 +1092,8 @@ mod tests {
             let client_messages = apply_actions(leader, actions, &mut consensus_modules);
             assert_eq!(1, client_messages.len());
             for module in consensus_modules.values() {
-                assert_eq!((Term(1), value), module.persistent_log.entry(LogIndex(1)).unwrap());
+                assert_eq!(value, module.persistent_log.entry(LogIndex(1)).unwrap());
+                assert_eq!(Term(1), module.persistent_log.entry_term(LogIndex(1)).unwrap());
             }
         })
     }
@@ -1121,7 +1124,8 @@ mod tests {
             let client_messages = apply_actions(leader, actions, &mut consensus_modules);
             assert_eq!(1, client_messages.len());
             for module in consensus_modules.values() {
-                assert_eq!((Term(1), value), module.persistent_log.entry(LogIndex(1)).unwrap());
+                assert_eq!(value, module.persistent_log.entry(LogIndex(1)).unwrap());
+                assert_eq!(Term(1), module.persistent_log.entry_term(LogIndex(1)).unwrap());
             }
         }
     }
@@ -1148,7 +1152,8 @@ mod tests {
             let client_messages = apply_actions(leader, actions, &mut consensus_modules);
             assert_eq!(1, client_messages.len());
             for module in consensus_modules.values() {
-                assert_eq!((Term(1), value), module.persistent_log.entry(LogIndex(1)).unwrap());
+                assert_eq!(value, module.persistent_log.entry(LogIndex(1)).unwrap());
+                assert_eq!(Term(1), module.persistent_log.entry_term(LogIndex(1)).unwrap());
             }
         })
     }
@@ -1175,7 +1180,8 @@ mod tests {
             let client_messages = apply_actions(leader, actions, &mut consensus_modules);
             assert_eq!(1, client_messages.len());
             for module in consensus_modules.values() {
-                assert_eq!((Term(1), value), module.persistent_log.entry(LogIndex(1)).unwrap());
+                assert_eq!(value, module.persistent_log.entry(LogIndex(1)).unwrap());
+                assert_eq!(Term(1), module.persistent_log.entry_term(LogIndex(1)).unwrap());
             }
         })
     }
