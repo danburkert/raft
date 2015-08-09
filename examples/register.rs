@@ -1,15 +1,4 @@
-//! This example demonstrates using Raft to implement a replicated hashmap over `n` servers and
-//! interact with them over `m` clients.
-//!
-//! This example uses Bincode serialization.
-//!
-//! Comments below will aim to be tailored towards Raft and it's usage. If you have any questions,
-//! Please, just open an issue.
-//!
-//! TODO: For the sake of simplicity of this example, we don't implement a `Log` and just use a
-//! simple testing one. We should improve this in the future.
-
-extern crate raft; // <--- Kind of a big deal for this!
+extern crate raft;
 extern crate docopt;
 extern crate env_logger;
 extern crate rustc_serialize;
@@ -22,7 +11,6 @@ use std::collections::HashMap;
 use docopt::Docopt;
 use bincode::SizeLimit;
 
-// Raft's major components. See comments in code on usage and things.
 use raft::{
     state_machine,
     persistent_log,
@@ -31,9 +19,7 @@ use raft::{
     Client,
 };
 
-/// This is the defined message type for this example. For the sake of simplicity we don't go very
-/// far with this. In a "real" application you may want to more distinctly distinguish between
-/// data meant for `.query()` and data meant for `.propose()`.
+/// Message types supported by the distributed register.
 #[derive(RustcEncodable, RustcDecodable, PartialEq)]
 enum Message {
     Get,
