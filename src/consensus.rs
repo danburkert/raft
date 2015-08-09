@@ -789,7 +789,6 @@ impl <L, M> fmt::Debug for Consensus<L, M> where L: Log, M: StateMachine {
 mod tests {
 
     extern crate env_logger;
-    extern crate test;
 
     use std::collections::{HashMap, VecDeque};
     use std::io::Cursor;

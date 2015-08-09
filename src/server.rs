@@ -446,7 +446,6 @@ impl <L, M> fmt::Debug for Server<L, M> where L: Log, M: StateMachine {
 mod tests {
 
     extern crate env_logger;
-    extern crate test;
 
     use std::collections::HashMap;
     use std::io::{self, Read, Write};
@@ -455,7 +454,6 @@ mod tests {
 
     use capnp::{serialize, MessageReader, ReaderOptions};
     use mio::EventLoop;
-    use test::Bencher;
 
     use ClientId;
     use Result;
@@ -782,35 +780,5 @@ mod tests {
         event_loop.run_once(&mut server).unwrap();
 
         assert_eq!(peer_id, read_server_preamble(&mut in_stream));
-    }
-
-    /// Literally the same thing as above.
-    #[bench]
-    fn bench_connection_send(b: &mut Bencher) {
-        setup_test!("test_connection_send");
-        b.iter(|| {
-            let peer_id = ServerId::from(1);
-
-            let peer_listener = TcpListener::bind("127.0.0.1:0").unwrap();
-
-            let mut peers = HashMap::new();
-            peers.insert(peer_id, peer_listener.local_addr().unwrap());
-            let (mut server, mut event_loop) = new_test_server(peers).unwrap();
-
-            // Accept the server's connection.
-            let (mut in_stream, _)  = peer_listener.accept().unwrap();
-
-            // Accept the preamble.
-            event_loop.run_once(&mut server).unwrap();
-            assert_eq!(ServerId::from(0), read_server_preamble(&mut in_stream));
-
-            // Send a test message (the type is not important).
-            let mut actions = Actions::new();
-            actions.peer_messages.push((peer_id, messages::server_connection_preamble(peer_id)));
-            server.execute_actions(&mut event_loop, actions);
-            event_loop.run_once(&mut server).unwrap();
-
-            assert_eq!(peer_id, read_server_preamble(&mut in_stream));
-        })
     }
 }
