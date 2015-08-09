@@ -181,6 +181,11 @@ impl fmt::Display for Error {
 /// The term of a log entry.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Term(u64);
+impl Term {
+    pub fn as_u64(self) -> u64 {
+        self.0
+    }
+}
 impl From<u64> for Term {
     fn from(val: u64) -> Term {
         Term(val)
@@ -212,6 +217,11 @@ impl fmt::Display for Term {
 /// The index of a log entry.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LogIndex(u64);
+impl LogIndex {
+    pub fn as_u64(self) -> u64 {
+        self.0
+    }
+}
 impl From<u64> for LogIndex {
     fn from(val: u64) -> LogIndex {
         LogIndex(val)
@@ -240,10 +250,15 @@ impl fmt::Display for LogIndex {
     }
 }
 
-/// The id of a Raft server. Must be unique among the participants in a
-/// consensus group. Represented as a `u64`.
+/// The ID of a Raft server. Must be unique among the participants in a
+/// consensus group.
 #[derive(Copy, Clone, Hash, PartialEq, Eq)]
 pub struct ServerId(u64);
+impl ServerId {
+    fn as_u64(self) -> u64 {
+        self.0
+    }
+}
 impl From<u64> for ServerId {
     fn from(val: u64) -> ServerId {
         ServerId(val)
@@ -265,7 +280,7 @@ impl fmt::Display for ServerId {
     }
 }
 
-/// The ID of a Raft client. Represented as a `Uuid::v4`.
+/// The ID of a Raft client.
 #[derive(Copy, Clone, Hash, PartialEq, Eq)]
 pub struct ClientId(Uuid);
 impl ClientId {
@@ -280,16 +295,6 @@ impl ClientId {
             Some(uuid) => Ok(ClientId(uuid)),
             None => Err(Error::Raft(RaftError::InvalidClientId)),
         }
-    }
-}
-impl From<Uuid> for ClientId {
-    fn from(val: Uuid) -> ClientId {
-        ClientId(val)
-    }
-}
-impl Into<Uuid> for ClientId {
-    fn into(self) -> Uuid {
-        self.0
     }
 }
 impl fmt::Debug for ClientId {

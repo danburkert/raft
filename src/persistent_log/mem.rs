@@ -87,12 +87,12 @@ impl Log for MemLog {
     }
 
     fn entry(&self, index: LogIndex) -> result::Result<&[u8], Error> {
-        let (_, ref bytes) = self.entries[Into::<u64>::into(index) as usize - 1];
+        let (_, ref bytes) = self.entries[(index - 1).as_u64() as usize];
         Ok(&bytes)
     }
 
     fn entry_term(&self, index: LogIndex) -> result::Result<Term, Error> {
-        let (term, _) = self.entries[Into::<u64>::into(index) as usize - 1];
+        let (term, _) = self.entries[(index - 1).as_u64() as usize];
         Ok(term)
     }
 
@@ -101,7 +101,7 @@ impl Log for MemLog {
                       entries: &[(Term, &[u8])])
                       -> result::Result<(), Error> {
         assert!(self.latest_log_index().unwrap() + 1 >= from);
-        self.entries.truncate(Into::<u64>::into(from) as usize - 1);
+        self.entries.truncate((from - 1).as_u64() as usize);
         Ok(self.entries.extend(entries.iter().map(|&(term, command)| (term, command.to_vec()))))
     }
 }

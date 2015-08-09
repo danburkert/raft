@@ -24,7 +24,7 @@ pub fn server_connection_preamble(id: ServerId) -> Rc<MallocMessageBuilder> {
     {
         message.init_root::<connection_preamble::Builder>()
                .init_id()
-               .set_server(id.into());
+               .set_server(id.as_u64());
     }
     Rc::new(message)
 }
@@ -51,10 +51,10 @@ pub fn append_entries_request(term: Term,
     {
         let mut request = message.init_root::<message::Builder>()
                                  .init_append_entries_request();
-        request.set_term(term.into());
-        request.set_prev_log_index(prev_log_index.into());
-        request.set_prev_log_term(prev_log_term.into());
-        request.set_leader_commit(leader_commit.into());
+        request.set_term(term.as_u64());
+        request.set_prev_log_index(prev_log_index.as_u64());
+        request.set_prev_log_term(prev_log_term.as_u64());
+        request.set_leader_commit(leader_commit.as_u64());
 
         let mut entry_list = request.init_entries(entries.len() as u32);
         for (n, entry) in entries.iter().enumerate() {
@@ -69,8 +69,8 @@ pub fn append_entries_response_success(term: Term, log_index: LogIndex) -> Rc<Ma
     {
         let mut response = message.init_root::<message::Builder>()
                                   .init_append_entries_response();
-        response.set_term(term.into());
-        response.set_success(log_index.into());
+        response.set_term(term.as_u64());
+        response.set_success(log_index.as_u64());
     }
     Rc::new(message)
 }
@@ -80,7 +80,7 @@ pub fn append_entries_response_stale_term(term: Term) -> Rc<MallocMessageBuilder
     {
         let mut response = message.init_root::<message::Builder>()
                                   .init_append_entries_response();
-        response.set_term(term.into());
+        response.set_term(term.as_u64());
         response.set_stale_term(());
     }
     Rc::new(message)
@@ -91,7 +91,7 @@ pub fn append_entries_response_inconsistent_prev_entry(term: Term) -> Rc<MallocM
     {
         let mut response = message.init_root::<message::Builder>()
                                   .init_append_entries_response();
-        response.set_term(term.into());
+        response.set_term(term.as_u64());
         response.set_inconsistent_prev_entry(());
     }
     Rc::new(message)
@@ -104,7 +104,7 @@ pub fn append_entries_response_internal_error(term: Term,
     {
         let mut response = message.init_root::<message::Builder>()
                                   .init_append_entries_response();
-        response.set_term(term.into());
+        response.set_term(term.as_u64());
         response.set_internal_error(error);
     }
     Rc::new(message)
@@ -120,9 +120,9 @@ pub fn request_vote_request(term: Term,
     {
         let mut request = message.init_root::<message::Builder>()
                                  .init_request_vote_request();
-        request.set_term(term.into());
-        request.set_last_log_index(last_log_index.into());
-        request.set_last_log_term(last_log_term.into());
+        request.set_term(term.as_u64());
+        request.set_last_log_index(last_log_index.as_u64());
+        request.set_last_log_term(last_log_term.as_u64());
     }
     Rc::new(message)
 }
@@ -132,7 +132,7 @@ pub fn request_vote_response_granted(term: Term) -> Rc<MallocMessageBuilder> {
     {
         let mut response = message.init_root::<message::Builder>()
                                   .init_request_vote_response();
-        response.set_term(term.into());
+        response.set_term(term.as_u64());
         response.set_granted(());
     }
     Rc::new(message)
@@ -143,7 +143,7 @@ pub fn request_vote_response_stale_term(term: Term) -> Rc<MallocMessageBuilder> 
     {
         let mut response = message.init_root::<message::Builder>()
                                   .init_request_vote_response();
-        response.set_term(term.into());
+        response.set_term(term.as_u64());
         response.set_stale_term(());
     }
     Rc::new(message)
@@ -154,7 +154,7 @@ pub fn request_vote_response_already_voted(term: Term) -> Rc<MallocMessageBuilde
     {
         let mut response = message.init_root::<message::Builder>()
                                   .init_request_vote_response();
-        response.set_term(term.into());
+        response.set_term(term.as_u64());
         response.set_already_voted(());
     }
     Rc::new(message)
@@ -165,7 +165,7 @@ pub fn request_vote_response_inconsistent_log(term: Term) -> Rc<MallocMessageBui
     {
         let mut response = message.init_root::<message::Builder>()
                                   .init_request_vote_response();
-        response.set_term(term.into());
+        response.set_term(term.as_u64());
         response.set_inconsistent_log(());
     }
     Rc::new(message)
@@ -176,7 +176,7 @@ pub fn request_vote_response_internal_error(term: Term, error: &str) -> Rc<Mallo
     {
         let mut response = message.init_root::<message::Builder>()
                                   .init_request_vote_response();
-        response.set_term(term.into());
+        response.set_term(term.as_u64());
         response.set_internal_error(error);
     }
     Rc::new(message)

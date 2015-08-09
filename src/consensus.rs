@@ -220,8 +220,8 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
             ConsensusState::Leader => {
                 // Send any outstanding entries to the peer, or an empty heartbeat if there are no
                 // outstanding entries.
-                let from_index = Into::<u64>::into(self.leader_state.next_index(&peer));
-                let until_index = Into::<u64>::into(self.latest_log_index()) + 1;
+                let from_index = self.leader_state.next_index(&peer).as_u64();
+                let until_index = (self.latest_log_index() + 1).as_u64();
 
                 let prev_log_index = from_index - 1;
                 let prev_log_term =
@@ -235,11 +235,11 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
                 {
                     let mut request = message.init_root::<message::Builder>()
                                              .init_append_entries_request();
-                    request.set_term(self.current_term().into());
+                    request.set_term(self.current_term().as_u64());
 
                     request.set_prev_log_index(prev_log_index);
-                    request.set_prev_log_term(prev_log_term.into());
-                    request.set_leader_commit(self.commit_index.into());
+                    request.set_prev_log_term(prev_log_term.as_u64());
+                    request.set_leader_commit(self.commit_index.as_u64());
 
                     let mut entries = request.init_entries((until_index - from_index) as u32);
                     for (n, index) in (from_index..until_index).enumerate() {
@@ -439,13 +439,13 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
             {
                 let mut request = message.init_root::<message::Builder>()
                                          .init_append_entries_request();
-                request.set_term(local_term.into());
-                request.set_prev_log_index(prev_log_index.into());
-                request.set_prev_log_term(prev_log_term.into());
-                request.set_leader_commit(self.commit_index.into());
+                request.set_term(local_term.as_u64());
+                request.set_prev_log_index(prev_log_index.as_u64());
+                request.set_prev_log_term(prev_log_term.as_u64());
+                request.set_leader_commit(self.commit_index.as_u64());
 
-                let from_index = Into::<u64>::into(next_index);
-                let until_index = Into::<u64>::into(local_latest_log_index) + 1;
+                let from_index = next_index.as_u64();
+                let until_index = (local_latest_log_index + 1).as_u64();
                 let mut entries = request.init_entries((until_index - from_index) as u32);
                 for (n, index) in (from_index..until_index).enumerate() {
                     entries.set(n as u32, self.persistent_log.entry(LogIndex::from(index)).unwrap());
@@ -547,7 +547,7 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
                         request: proposal_request::Reader,
                         actions: &mut Actions) {
         if self.is_candidate() || (self.is_follower() && self.follower_state.leader.is_none()) {
-            actions.client_messages.push((from.into(), messages::command_response_unknown_leader()));
+            actions.client_messages.push((from, messages::command_response_unknown_leader()));
         } else if self.is_follower() {
             let message =
                 messages::command_response_not_leader(&self.peers[&self.follower_state.leader.unwrap()]);
@@ -589,7 +589,7 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
         scoped_trace!("query from Client({})", from);
 
         if self.is_candidate() || (self.is_follower() && self.follower_state.leader.is_none()) {
-            actions.client_messages.push((from.into(), messages::command_response_unknown_leader()));
+            actions.client_messages.push((from, messages::command_response_unknown_leader()));
         } else if self.is_follower() {
             let message =
                 messages::command_response_not_leader(&self.peers[&self.follower_state.leader.unwrap()]);
@@ -611,10 +611,10 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
         {
             let mut request = message.init_root::<message::Builder>()
                                      .init_append_entries_request();
-            request.set_term(self.current_term().into());
-            request.set_prev_log_index(self.latest_log_index().into());
-            request.set_prev_log_term(self.persistent_log.latest_log_term().unwrap().into());
-            request.set_leader_commit(self.commit_index.into());
+            request.set_term(self.current_term().as_u64());
+            request.set_prev_log_index(self.latest_log_index().as_u64());
+            request.set_prev_log_term(self.persistent_log.latest_log_term().unwrap().as_u64());
+            request.set_leader_commit(self.commit_index.as_u64());
             request.init_entries(0);
         }
         actions.peer_messages.push((peer, Rc::new(message)));
