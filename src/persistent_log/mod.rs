@@ -8,6 +8,7 @@
 mod mem;
 
 use std::fmt::Debug;
+use std::ops::Deref;
 
 pub use persistent_log::mem::MemLog;
 
@@ -19,6 +20,8 @@ use ServerId;
 ///
 /// The log durably stores entries, snapshots, the current term, and votes.
 pub trait Log: Clone + Debug + Send + 'static {
+
+    type Entry: Deref<Target=[u8]>;
 
     /// Returns the latest known term.
     fn current_term(&self) -> Term;
@@ -42,12 +45,12 @@ pub trait Log: Clone + Debug + Send + 'static {
     /// Returns the term of the latest persisted log entry (0 if the log is empty).
     fn latest_log_term(&self) -> Term;
 
-    /// Returns the entry at the provided log index.
+    /// Returns the entries between the provided indices.
     ///
     /// # Panic
     ///
-    /// This method will panic if the entry does not exist.
-    fn entry(&self, index: LogIndex) -> &[u8];
+    /// This method will panic if the entries do not exist.
+    fn entries<'a>(&'a self, from: LogIndex, until: LogIndex) -> Box<Iterator<Item=&'a Self::Entry> + Sized + 'a>;
 
     /// Returns the term of the entry at the provided log index.
     ///

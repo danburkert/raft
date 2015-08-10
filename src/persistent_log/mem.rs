@@ -1,3 +1,5 @@
+use std::{iter, slice};
+
 use persistent_log::Log;
 use LogIndex;
 use ServerId;
@@ -9,7 +11,9 @@ use Term;
 pub struct MemLog {
     current_term: Term,
     voted_for: Option<ServerId>,
-    entries: Vec<(Term, Vec<u8>)>,
+    entries: Vec<Vec<u8>>,
+    terms: Vec<Term>,
+
 }
 
 impl MemLog {
@@ -19,11 +23,14 @@ impl MemLog {
             current_term: Term(0),
             voted_for: None,
             entries: Vec::new(),
+            terms: Vec::new(),
         }
     }
 }
 
 impl Log for MemLog {
+
+    type Entry = Vec<u8>;
 
     fn current_term(&self) -> Term {
         self.current_term
@@ -53,26 +60,35 @@ impl Log for MemLog {
     }
 
     fn latest_log_term(&self) -> Term {
-        let len = self.entries.len();
+        let len = self.terms.len();
         if len == 0 {
             Term::from(0)
         } else {
-            self.entries[len - 1].0
+            self.terms[len - 1]
         }
     }
 
-    fn entry(&self, index: LogIndex) -> &[u8] {
-        &self.entries[(index - 1).as_u64() as usize].1
+    fn entries<'a>(&'a self, from: LogIndex, until: LogIndex) -> Box<Iterator<Item=&'a Self::Entry> + Sized + 'a> {
+        let start = (from - 1).as_u64() as usize;
+        let end = (until - 1).as_u64() as usize;
+        Box::new(self.entries[start..end].iter())
     }
 
     fn entry_term(&self, index: LogIndex) -> Term {
-        self.entries[(index - 1).as_u64() as usize].0
+        if index == LogIndex::from(0) {
+            Term::from(0)
+        } else {
+            self.terms[(index - 1).as_u64() as usize]
+        }
     }
 
     fn append_entries(&mut self, from: LogIndex, entries: &[(Term, &[u8])]) {
         assert!(self.latest_log_index() + 1 >= from);
-        self.entries.truncate((from - 1).as_u64() as usize);
-        self.entries.extend(entries.iter().map(|&(term, command)| (term, command.to_vec())));
+        let index = (from - 1).as_u64() as usize;
+        self.entries.truncate(index);
+        self.terms.truncate(index);
+        self.entries.extend(entries.iter().map(|entry| entry.1.to_owned()));
+        self.terms.extend(entries.iter().map(|entry| entry.0));
     }
 }
 

@@ -3,6 +3,7 @@
 
 use std::net::SocketAddr;
 use std::rc::Rc;
+use std::ops::Deref;
 
 use capnp::{
     MallocMessageBuilder,
@@ -41,12 +42,15 @@ pub fn client_connection_preamble(id: ClientId) -> Rc<MallocMessageBuilder> {
 
 // AppendEntries
 
-pub fn append_entries_request(term: Term,
-                              prev_log_index: LogIndex,
-                              prev_log_term: Term,
-                              entries: &[&[u8]],
-                              leader_commit: LogIndex)
-                              -> Rc<MallocMessageBuilder> {
+pub fn append_entries_request<A, B>(term: Term,
+                                     prev_log_index: LogIndex,
+                                     prev_log_term: Term,
+                                     num_entries: u32,
+                                     entries: B,
+                                     leader_commit: LogIndex)
+                                     -> Rc<MallocMessageBuilder>
+where A: Deref<Target=[u8]> + Sized,
+      B: Iterator<Item=A> + Sized {
     let mut message = MallocMessageBuilder::new_default();
     {
         let mut request = message.init_root::<message::Builder>()
@@ -56,9 +60,9 @@ pub fn append_entries_request(term: Term,
         request.set_prev_log_term(prev_log_term.as_u64());
         request.set_leader_commit(leader_commit.as_u64());
 
-        let mut entry_list = request.init_entries(entries.len() as u32);
-        for (n, entry) in entries.iter().enumerate() {
-            entry_list.set(n as u32, entry);
+        let mut entry_list = request.init_entries(num_entries);
+        for (n, entry) in entries.enumerate() {
+            entry_list.set(n as u32, &entry);
         }
     }
     Rc::new(message)

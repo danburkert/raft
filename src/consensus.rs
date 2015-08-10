@@ -14,7 +14,7 @@
 //! apply a command to the local `StateMachine`, or return an event to be sent
 //! to one or more remote peers or clients.
 
-use std::{cmp, fmt};
+use std::{cmp, fmt, iter};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::rc::Rc;
@@ -220,34 +220,24 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
             ConsensusState::Leader => {
                 // Send any outstanding entries to the peer, or an empty heartbeat if there are no
                 // outstanding entries.
-                let from_index = self.leader_state.next_index(&peer).as_u64();
-                let until_index = (self.latest_log_index() + 1).as_u64();
+
+                let from_index = self.leader_state.next_index(&peer);
+                let until_index = self.latest_log_index() + 1;
+                let num_entries = until_index.as_u64() - from_index.as_u64();
 
                 let prev_log_index = from_index - 1;
-                let prev_log_term =
-                    if prev_log_index == 0 {
-                        Term(0)
-                    } else {
-                        self.log.entry_term(LogIndex(prev_log_index))
-                    };
+                let prev_log_term = self.log.entry_term(prev_log_index);
 
-                let mut message = MallocMessageBuilder::new_default();
-                {
-                    let mut request = message.init_root::<message::Builder>()
-                                             .init_append_entries_request();
-                    request.set_term(self.current_term().as_u64());
 
-                    request.set_prev_log_index(prev_log_index);
-                    request.set_prev_log_term(prev_log_term.as_u64());
-                    request.set_leader_commit(self.commit_index.as_u64());
+                let message = messages::append_entries_request(self.log.current_term(),
+                                                               prev_log_index,
+                                                               prev_log_term,
+                                                               num_entries as u32,
+                                                               self.log.entries(from_index, until_index),
+                                                               self.commit_index);
 
-                    let mut entries = request.init_entries((until_index - from_index) as u32);
-                    for (n, index) in (from_index..until_index).enumerate() {
-                        entries.set(n as u32, self.log.entry(LogIndex::from(index)));
-                    }
-                }
-                self.leader_state.set_next_index(peer, LogIndex(until_index));
-                actions.peer_messages.push((peer, Rc::new(message)));
+                self.leader_state.set_next_index(peer, until_index);
+                actions.peer_messages.push((peer, message));
             },
             ConsensusState::Candidate => {
                 // Resend the request vote request if a response has not yet been receieved.
@@ -369,7 +359,6 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
                                actions: &mut Actions) {
         let local_term = self.current_term();
         let responder_term = Term::from(response.get_term());
-        let local_latest_log_index = self.latest_log_index();
 
         if local_term < responder_term {
             // Responder has a higher term number. Relinquish leader position (if it is held), and
@@ -394,7 +383,7 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
                 scoped_trace!("AppendEntriesResponse from peer {}: success", from);
                 scoped_assert!(self.is_leader());
                 let follower_latest_log_index = LogIndex::from(follower_latest_log_index);
-                scoped_assert!(follower_latest_log_index <= local_latest_log_index);
+                scoped_assert!(follower_latest_log_index <= self.latest_log_index());
                 self.leader_state.set_match_index(from, follower_latest_log_index);
                 self.advance_commit_index(actions);
             }
@@ -423,36 +412,29 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
         }
 
         let next_index = self.leader_state.next_index(&from);
-        if next_index <= local_latest_log_index {
+        if next_index <= self.latest_log_index() {
             // If the peer is behind, send it entries to catch up.
-            scoped_debug!("AppendEntriesResponse: peer {} is missing {} entries",
-                          from, (local_latest_log_index - next_index.0).0);
+            scoped_debug!("AppendEntriesResponse: peer {} is missing entries {} through {}",
+                          from, next_index, self.latest_log_index());
             let prev_log_index = next_index - 1;
-            let prev_log_term =
-                if prev_log_index == LogIndex(0) {
-                    Term(0)
-                } else {
-                    self.log.entry_term(prev_log_index)
-                };
+            let prev_log_term = self.log.entry_term(prev_log_index);
 
-            let mut message = MallocMessageBuilder::new_default();
-            {
-                let mut request = message.init_root::<message::Builder>()
-                                         .init_append_entries_request();
-                request.set_term(local_term.as_u64());
-                request.set_prev_log_index(prev_log_index.as_u64());
-                request.set_prev_log_term(prev_log_term.as_u64());
-                request.set_leader_commit(self.commit_index.as_u64());
+            let from_index = self.leader_state.next_index(&from);
+            let until_index = self.latest_log_index() + 1;
+            let num_entries = until_index.as_u64() - from_index.as_u64();
 
-                let from_index = next_index.as_u64();
-                let until_index = (local_latest_log_index + 1).as_u64();
-                let mut entries = request.init_entries((until_index - from_index) as u32);
-                for (n, index) in (from_index..until_index).enumerate() {
-                    entries.set(n as u32, self.log.entry(LogIndex::from(index)));
-                }
-            }
-            self.leader_state.set_next_index(from, local_latest_log_index + 1);
-            actions.peer_messages.push((from, Rc::new(message)));
+            let prev_log_index = from_index - 1;
+            let prev_log_term = self.log.entry_term(prev_log_index);
+
+            let message = messages::append_entries_request(self.log.current_term(),
+                                                           prev_log_index,
+                                                           prev_log_term,
+                                                           num_entries as u32,
+                                                           self.log.entries(from_index, until_index),
+                                                           self.commit_index);
+
+            self.leader_state.set_next_index(from, until_index);
+            actions.peer_messages.push((from, message));
         } else {
             // If the peer is caught up, set a heartbeat timeout.
             scoped_trace!("AppendEntriesResponse: scheduling heartbeat for peer {}", from);
@@ -569,7 +551,8 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
                 let message = messages::append_entries_request(term,
                                                                prev_log_index,
                                                                prev_log_term,
-                                                               &[entry],
+                                                               1,
+                                                               iter::once(entry),
                                                                self.commit_index);
                 for &peer in self.peers.keys() {
                     if self.leader_state.next_index(&peer) == prev_log_index + 1 {
@@ -650,7 +633,8 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
         let message = messages::append_entries_request(current_term,
                                                        latest_log_index,
                                                        latest_log_term,
-                                                       &[],
+                                                       0,
+                                                       iter::empty(),
                                                        self.commit_index);
         for &peer in self.peers().keys() {
             actions.peer_messages.push((peer, message.clone()));
@@ -713,14 +697,15 @@ impl <L, M> Consensus<L, M> where L: Log, M: StateMachine {
     /// Returns the set of return values from the commits applied.
     fn apply_commits(&mut self) -> HashMap<LogIndex, Vec<u8>> {
         let mut results = HashMap::new();
-        while self.last_applied < self.commit_index {
-            let entry = self.log.entry(self.last_applied + 1);
 
-            if !entry.is_empty() {
-                let result = self.state_machine.apply(entry);
-                results.insert(self.last_applied + 1, result);
+        if self.last_applied < self.commit_index {
+            for entry in self.log.entries(self.last_applied, self.commit_index + 1) {
+                if !entry.is_empty() {
+                    let result = self.state_machine.apply(entry);
+                    results.insert(self.last_applied + 1, result);
+                }
             }
-            self.last_applied = self.last_applied + 1;
+            self.last_applied = self.commit_index;
         }
         results
     }
